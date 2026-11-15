@@ -7,13 +7,34 @@ window.__CH_WEB = true;
     window.claude = { use: function () { return Promise.resolve(null); } };
     return;
   }
-  var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: false } });
+  var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  var currentUser = null;
+  var home = function () { return location.origin + location.pathname; };
+  function authErr(e) { var x = new Error((e && e.message) || "Sign-in failed"); x.code = "auth"; return x; }
+  window.CH_AUTH = {
+    init: function () { return sb.auth.getSession().then(function (r) { currentUser = r.data.session ? r.data.session.user : null; return currentUser; }); },
+    user: function () { return currentUser; },
+    signIn: function (email, password) { return sb.auth.signInWithPassword({ email: email, password: password }).then(function (r) { if (r.error) throw authErr(r.error); currentUser = r.data.user; return currentUser; }); },
+    signUp: function (email, password, name) {
+      return sb.auth.signUp({ email: email, password: password, options: { data: { name: name }, emailRedirectTo: home() } }).then(function (r) {
+        if (r.error) throw authErr(r.error);
+        if (r.data.session) { currentUser = r.data.user; return { user: currentUser }; }
+        if (r.data.user && r.data.user.identities && r.data.user.identities.length === 0) throw authErr({ message: "User already registered" });
+        return { needsConfirm: true };
+      });
+    },
+    signOut: function () { return sb.auth.signOut().then(function () { currentUser = null; }); },
+    reset: function (email) { return sb.auth.resetPasswordForEmail(email, { redirectTo: home() }).then(function (r) { if (r.error) throw authErr(r.error); }); },
+    updatePassword: function (pw) { return sb.auth.updateUser({ password: pw }).then(function (r) { if (r.error) throw authErr(r.error); }); },
+    updateName: function (name) { return sb.auth.updateUser({ data: { name: name } }).then(function (r) { if (r.error) throw authErr(r.error); currentUser = r.data.user; }); },
+    onChange: function (cb) { sb.auth.onAuthStateChange(function (ev, session) { currentUser = session ? session.user : null; setTimeout(function () { cb(ev, currentUser); }, 0); }); }
+  };
   var T = "docs", BUCKET = "photos";
 
   function rid(n) { var a = new Uint8Array(n || 16); crypto.getRandomValues(a); return Array.from(a, function (b) { return "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]; }).join(""); }
   function parentCol(p) { return p.split("/").slice(0, -1).join("/"); }
   function snapDoc(path, row) { return { id: path.split("/").pop(), exists: !!row, data: function () { return row ? row.data : undefined; }, metadata: { fromCache: false, hasPendingWrites: false } }; }
-  function dbErr(e) { var x = new Error((e && e.message) || "Database error"); x.code = "unavailable"; return x; }
+  function dbErr(e) { var m = (e && e.message) || "Database error"; var x = new Error(m); x.code = (e && (e.code === "42501" || /row-level security|permission denied/i.test(m))) ? "permission" : "unavailable"; return x; }
   function isObj(v) { return v && typeof v === "object" && !Array.isArray(v); }
   function deepMerge(a, b) { var out = Object.assign({}, a); Object.keys(b).forEach(function (k) { out[k] = isObj(out[k]) && isObj(b[k]) ? deepMerge(out[k], b[k]) : b[k]; }); return out; }
 
@@ -83,7 +104,7 @@ window.__CH_WEB = true;
     upload: function (blob, opts) {
       var id = rid(24) + ".jpg";
       return sb.storage.from(BUCKET).upload(id, blob, { contentType: (opts && opts.type) || blob.type || "image/jpeg", upsert: false }).then(function (r) {
-        if (r.error) { var x = new Error(r.error.message); x.code = "upstream_error"; throw x; }
+        if (r.error) { var x = new Error(r.error.message); x.code = /row-level security|unauthorized|403/i.test(r.error.message + (r.error.statusCode || "")) ? "permission" : "upstream_error"; throw x; }
         return { id: id, url: window.CH_ASSET_URL(id), sizeBytes: blob.size, contentType: "image/jpeg" };
       });
     },
@@ -111,7 +132,7 @@ window.__CH_WEB = true;
   }
   var caps = {
     db: { doc: docRef, collection: function (p) { return colRef(p); } },
-    user: { id: function () { return Promise.resolve(null); }, can: function () { return Promise.resolve(true); }, isOwner: function () { return false; } },
+    user: { id: function () { return Promise.resolve(currentUser ? currentUser.id : null); }, can: function () { return Promise.resolve(true); }, isOwner: function () { return false; } },
     assets: assets, downloads: downloads
   };
   window.claude = { use: function (n) { return Promise.resolve(caps[n] || null); } };

@@ -122,6 +122,19 @@ label.field>span{display:block;font-size:13px;font-weight:600;margin-bottom:7px}
 .export b{font-size:16px}.export span{font-size:13px;color:var(--muted)}
 .export .ic{font-size:22px;margin-bottom:4px}
 .export:active{transform:scale(.98)}
+.footer{text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px;padding:10px 0 20px}
+.minis{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x mandatory;scrollbar-width:none}
+.minis::-webkit-scrollbar{display:none}
+.mini{flex:none;width:132px;aspect-ratio:1;border-radius:4px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;box-shadow:0 8px 22px rgba(30,27,23,.16);scroll-snap-align:start;text-align:center}
+.mini.dark{background:#141212;color:#F3ECE2}.mini.cream{background:#F1EBE1;color:#1E1B17}
+.mini b{font-size:9px;font-weight:800;letter-spacing:.02em;line-height:1.1}
+.mini small{font-size:5px;letter-spacing:.3em;font-weight:600;color:#857C70}
+.mhero{width:100%;height:52px;border-radius:3px;background:linear-gradient(180deg,#7fb2e5,#4b7fae 55%,#5b7d3e)}
+.mbar{display:flex;width:100%;height:3px;border-radius:2px;overflow:hidden}.mbar i{flex:1}
+.mcards{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;width:100%}.mcards i{aspect-ratio:3/4;border:2px solid;border-radius:3px;background:linear-gradient(180deg,#d9c7b8,#b9a291)}
+.mframe{width:80%;height:46px;border:2px solid;border-radius:4px;background:linear-gradient(180deg,#86b7e8,#6c5aa8 60%,#4f7a3b)}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px;width:100%;height:100%}.mgrid i{border-radius:3px}
+.mgrid5{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;width:90%}.mgrid5 i{aspect-ratio:1;border-radius:2px}
 /* modals */
 #modals .ov{position:fixed;inset:0;background:rgba(20,17,13,.55);display:flex;align-items:flex-end;justify-content:center;z-index:50;animation:fade .2s}
 .sheet{background:var(--card);width:100%;max-width:560px;max-height:94vh;overflow:auto;border-radius:24px 24px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:up .28s cubic-bezier(.2,.9,.3,1);position:relative}
@@ -195,6 +208,7 @@ const S = {
 };
 
 /* ==================== utils ==================== */
+(function(){ const rc=Element.prototype.replaceChildren; Element.prototype.replaceChildren=function(...a){ return rc.apply(this, a.flat(Infinity).filter(x=>x!=null&&x!==false)); }; })();
 const $ = (s, el=document) => el.querySelector(s);
 function h(tag, props, ...kids){
   const e = document.createElement(tag);
@@ -230,6 +244,7 @@ function loadScript(src){ return new Promise((res,rej)=>{ const s=document.creat
 function canvasBlob(c, type="image/jpeg", q=.9){ return new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error("encode failed")), type, q)); }
 function errMsg(e){
   const code = e && e.code;
+  if (code==="permission") return S.account ? "You don't have permission to do that." : "Please sign in first.";
   if (code==="invalid_argument") { S.readOnly = true; return "You don't have permission to add to hunts on this page. Ask the organizer to invite you as an Editor."; }
   if (code==="quota_exceeded" || code==="quota_or_state") return "Storage for this page is full. The organizer can remove some photos to make room.";
   if (code==="too_large") return "That photo is too large — try cropping it smaller.";
@@ -274,12 +289,110 @@ function progressOverlay(title){
 
 /* ==================== platform ==================== */
 function use(name){ try{ return (window.claude && window.claude.use) ? Promise.resolve(window.claude.use(name)).catch(()=>null) : Promise.resolve(null); }catch(e){ return Promise.resolve(null); } }
+const AUTH = window.CH_AUTH || null;
+function deviceId(){ let d = LS.get("device", null); if(!d){ d="dev-"+rid(10); LS.set("device", d); } return d; }
+function accountName(){ const a=S.account; return a ? ((a.user_metadata&&a.user_metadata.name) || (a.email||"").split("@")[0]) : ""; }
+function siteUrl(){ return WEB ? location.href.split("#")[0] : (INVITE_BASE && !INVITE_BASE.startsWith("/*") ? INVITE_BASE : ""); }
+async function requireAuth(reason){
+  if (!AUTH || S.account) return true;
+  return new Promise(res=>openSignIn(reason, ok=>res(!!ok)));
+}
+function openSignIn(reason, done){
+  const st={mode:"in", busy:false};
+  const body=h("div",{class:"stack"});
+  let finished=false;
+  const m=openModal(body,{onClose:()=>{ if(!finished) done&&done(false); }});
+  const draw=()=>{
+    const name=h("input",{placeholder:"Your name",maxlength:"30",autocomplete:"name",value:st.name||""});
+    const email=h("input",{type:"email",placeholder:"Email",autocomplete:"email",value:st.email||""});
+    const pw=h("input",{type:"password",placeholder:st.mode==="up"?"Create a password (6+ characters)":"Password",autocomplete:st.mode==="up"?"new-password":"current-password"});
+    const err=h("p",{class:"small",style:"color:#B3261E;min-height:0"});
+    const submit=async()=>{
+      st.email=email.value.trim(); st.name=name.value.trim();
+      if(!st.email || !pw.value){ err.textContent="Enter your email and password."; return; }
+      if(st.mode==="up" && !st.name){ err.textContent="Enter your name."; return; }
+      btn.disabled=true; btn.replaceChildren(h("span",{class:"spin"}));
+      try{
+        if(st.mode==="in"){ await AUTH.signIn(st.email,pw.value); }
+        else { const r=await AUTH.signUp(st.email,pw.value,st.name); if(r.needsConfirm){ body.replaceChildren(h("h2",null,"Check your email"),h("p",{class:"muted"},`We sent a confirmation link to ${st.email}. Tap it, then come back here and sign in.`),h("button",{class:"btn block",onclick:()=>{st.mode="in";draw();}},"Back to sign in")); return; } }
+        S.account=AUTH.user(); S.uid=S.account.id; finished=true; m.close(); toast(`Signed in as ${accountName()}`); renderView(); done&&done(true);
+      }catch(e){ err.textContent = authErr(e); btn.disabled=false; btn.textContent = st.mode==="in"?"Sign in":"Create account"; }
+    };
+    [email,pw,name].forEach(i=>i.addEventListener("keydown",e=>{ if(e.key==="Enter") submit(); }));
+    const btn=h("button",{class:"btn block lg",onclick:submit}, st.mode==="in"?"Sign in":"Create account");
+    body.replaceChildren(...[
+      h("div",{class:"eyebrow"}, reason || "Your account"),
+      h("h2",null, st.mode==="in" ? "Welcome back" : "Create your account"),
+      h("div",{class:"chips"}, h("button",{class:"chip"+(st.mode==="in"?" on":""),onclick:()=>{st.email=email.value;st.mode="in";draw();}},"Sign in"), h("button",{class:"chip"+(st.mode==="up"?" on":""),onclick:()=>{st.email=email.value;st.mode="up";draw();}},"New here? Create account")),
+      st.mode==="up" ? name : null, email, pw, err, btn,
+      st.mode==="in" ? h("button",{class:"btn ghost block sm",onclick:async()=>{ const em=email.value.trim(); if(!em){ err.textContent="Enter your email first, then tap Forgot password."; return; } try{ await AUTH.reset(em); err.style.color="var(--ink)"; err.textContent=`Password reset link sent to ${em}.`; }catch(e){ err.textContent=authErr(e); } }},"Forgot password?") : null,
+      h("p",{class:"hint",style:"text-align:center"},"Your account keeps your hunts and photos together on any device.")].filter(Boolean));
+    setTimeout(()=>(st.mode==="up"?name:email).focus(),60);
+  };
+  draw();
+}
+function authErr(e){
+  const m=(e&&e.message)||"";
+  if(/invalid login/i.test(m)) return "That email and password don't match.";
+  if(/already registered|already exists/i.test(m)) return "There's already an account with that email — try signing in.";
+  if(/not confirmed/i.test(m)) return "Confirm your email first — check your inbox for the link.";
+  if(/rate limit|too many/i.test(m)) return "Too many tries — wait a few minutes and try again.";
+  if(/password/i.test(m) && /6/.test(m)) return "Passwords need at least 6 characters.";
+  return m || "Something went wrong. Please try again.";
+}
+function openNewPassword(){
+  const pw=h("input",{type:"password",placeholder:"New password (6+ characters)",autocomplete:"new-password"});
+  const m=openModal(h("div",{class:"stack"},h("h2",null,"Set a new password"),pw,
+    h("button",{class:"btn block lg",onclick:async()=>{ try{ await AUTH.updatePassword(pw.value); m.close(); toast("Password updated"); }catch(e){ toast(authErr(e),5000); } }},"Save password")));
+}
+function openAccount(){
+  const name=h("input",{value:accountName(),maxlength:"30"});
+  const m=openModal(h("div",{class:"stack"},
+    h("div",{class:"row"}, h("div",{class:"avatar",style:{borderColor:INK,background:"#fff",width:"56px",height:"56px",fontSize:"22px"}},initials(accountName())), h("div",null,h("h3",null,accountName()),h("div",{class:"muted small"},S.account.email))),
+    h("label",{class:"field"},h("span",null,"Display name"),name),
+    h("button",{class:"btn soft block",onclick:async()=>{ try{ await AUTH.updateName(name.value.trim()||accountName()); S.account=AUTH.user(); toast("Saved"); m.close(); renderView(); }catch(e){ toast(authErr(e),5000); } }},"Save name"),
+    h("button",{class:"btn soft block",onclick:()=>{ m.close(); shareSite(); }},"↗︎  Share Color Hunt"),
+    h("button",{class:"btn ghost block",onclick:async()=>{ await AUTH.signOut(); S.account=null; S.uid=deviceId(); S.myHunts=null; m.close(); toast("Signed out"); renderView(); }},"Sign out")));
+}
+function acctBtn(){
+  if (!AUTH) return null;
+  if (!S.account) return h("button",{class:"btn ghost sm",onclick:()=>openSignIn()},"Sign in");
+  return h("button",{class:"avatar",title:"Your account","aria-label":"Your account",style:{width:"40px",height:"40px",borderColor:INK,background:"#fff",fontSize:"16px",fontWeight:"700"},onclick:openAccount}, initials(accountName()));
+}
+async function shareSite(){
+  const url=siteUrl();
+  if(!url){ toast("Share link isn't available here"); return; }
+  const data={title:"Color Hunt",text:"Color Hunt — everyone gets a color, everyone snaps what they find, and it turns into a photo book. 🎨📸",url};
+  try{ if(navigator.share){ await navigator.share(data); return; } }catch(e){ if(e&&e.name==="AbortError") return; }
+  openModal(h("div",{class:"stack"},h("div",{class:"eyebrow"},"Share Color Hunt"),h("h2",null,"Send this link"),
+    h("div",{class:"row"},h("input",{value:url,readonly:true,onfocus:e=>e.target.select()}),h("button",{class:"btn sm",onclick:()=>copyText(url)},"Copy")),
+    h("button",{class:"btn soft block",onclick:()=>copyText(data.text+"\n"+url)},"Copy a message with the link")));
+}
+async function recordMyHunt(code,title,role){
+  if(!S.account) return;
+  try{
+    const ref=S.db.doc("users/"+S.account.id); const snap=await ref.get();
+    const list=(snap.exists&&snap.data().hunts)||[];
+    const next=[{code,title,role,at:Date.now()},...list.filter(x=>x.code!==code)].slice(0,50);
+    await ref.set({hunts:next});
+  }catch(e){ console.warn(e); }
+}
 async function init(){
   renderView();
   const [db,user,assets,downloads] = await Promise.all(["db","user","assets","downloads"].map(use));
   S.db=db; S.user=user; S.assets=assets; S.downloads=downloads;
   let uid=null; try{ uid = user ? await user.id() : null; }catch(e){}
-  if (!uid){ uid = LS.get("device", null); if(!uid){ uid="dev-"+rid(10); LS.set("device", uid); } }
+  if (!uid){ uid = deviceId(); }
+  if (AUTH){
+    try{ S.account = await AUTH.init(); }catch(e){ S.account = null; }
+    if (S.account) uid = S.account.id;
+    AUTH.onChange((ev,u)=>{
+      const was = S.account && S.account.id;
+      S.account = u; S.uid = u ? u.id : deviceId(); S.myHunts = null;
+      if (ev==="PASSWORD_RECOVERY") openNewPassword();
+      if ((u && u.id) !== was) renderView();
+    });
+  }
   S.uid = uid; S.ready = true;
   try{ if (user && user.can){ const w = await user.can("data.write"); if (w===false) S.readOnly = true; } }catch(e){}
   window.addEventListener("hashchange", route);
@@ -377,7 +490,7 @@ function viewHome(){
   codeIn.addEventListener("keydown",e=>{ if(e.key==="Enter") join(); });
 
   const listBox = h("div");
-  const recent = LS.get("recent", []);
+  const recent = S.account ? [] : LS.get("recent", []);
   const fill = ()=>{
     const all = [...recent];
     (S.myHunts||[]).forEach(x=>{ if(!all.find(y=>y.code===x.code)) all.push(x); });
@@ -390,14 +503,18 @@ function viewHome(){
   fill();
   if (S.myHunts===null){
     S.myHunts=[];
-    S.db.collection("hunts").where("createdBy","==",S.uid).limit(20).get().then(s=>{ S.myHunts = s.docs.map(d=>({code:d.id, title:d.data().title})); if(S.route.v==="home") fill(); }).catch(()=>{});
+    const uid=S.uid;
+    Promise.all([
+      S.db.collection("hunts").where("createdBy","==",uid).limit(30).get().then(s=>s.docs.map(d=>({code:d.id, title:d.data().title}))).catch(()=>[]),
+      S.account ? S.db.doc("users/"+uid).get().then(s=>(s.exists&&s.data().hunts)||[]).catch(()=>[]) : Promise.resolve([])
+    ]).then(([a,b])=>{ if(uid!==S.uid) return; const m=[...b]; a.forEach(x=>{ if(!m.find(y=>y.code===x.code)) m.push(x); }); S.myHunts=m; if(S.route.v==="home") fill(); });
   }
   const hero = PALETTES[0].colors.map((c,i)=>h("i",{style:{background:c[1],"--rot":((i%2?1:-1)*(2+i%3))+"deg"}}));
   return h("div",{class:"wrap stack-lg"},
-    h("div",{class:"topbar"}, brand()),
+    h("div",{class:"topbar"}, brand(), h("div",{class:"row"}, siteUrl()?h("button",{class:"iconbtn",title:"Share Color Hunt","aria-label":"Share Color Hunt",onclick:shareSite},"↗︎"):null, acctBtn())),
     h("div",null,
       h("div",{class:"hero-swatches"}, hero),
-      h("div",{class:"eyebrow"},"A collaborative photo game"),
+      S.account ? h("div",{class:"eyebrow",style:"color:var(--ink)"},`Welcome back, ${accountName()}`) : h("div",{class:"eyebrow"},"A collaborative photo game"),
 
       h("p",{class:"muted",style:"font-size:17px;margin-top:10px"},"Everyone gets a color. Everyone snaps what they find. Color Hunt lays it all out as a photo book you can print or post.")),
     h("div",{class:"card stack"},
@@ -415,12 +532,41 @@ function viewHome(){
         [["Create","Set the colors and rules, then share the code or link."],
          ["Hunt","Each person gets a color and uploads up to 20 photos of it — then picks their best."],
          ["Book","Collages build themselves: a cover, the hunters, a chapter per color, and a best-of finale."]]
-        .map((s,i)=>h("div",null,h("b",{class:"n"},i+1),h("div",null,h("b",null,s[0]),h("p",{class:"muted small"},s[1])))))))
+        .map((s,i)=>h("div",null,h("b",{class:"n"},i+1),h("div",null,h("b",null,s[0]),h("p",{class:"muted small"},s[1])))))),
+    bookPreview(),
+    siteFooter())
+}
+function bookPreview(){
+  const cols=["#7D3CC8","#E23B3B","#F57C1F","#F6C324","#2D6FD8","#2E9E5B","#F06EAA"];
+  const pg=(cls,kids)=>h("div",{class:"mini "+cls},kids);
+  const tiles=(n,c)=>Array.from({length:n},(_,i)=>h("i",{style:{background:`linear-gradient(135deg, ${cols[(i+c)%7]}, ${cols[(i+c+2)%7]})`}}));
+  return h("div",{class:"card"},
+    h("div",{class:"eyebrow",style:"margin-bottom:6px"},"What you'll get"),
+    h("p",{class:"muted small",style:"margin-bottom:14px"},"A finished photo book — print it, save it as a PDF, or post the pages."),
+    h("div",{class:"minis"},
+      pg("dark", [h("div",{class:"mhero"}), h("div",{class:"mbar"}, cols.map(c=>h("i",{style:{background:c}}))), h("b",null,"OUR TRIP",h("span",{style:"color:#C9A464"},":")," IN COLOR")]),
+      pg("cream", [h("small",null,"MEET THE"), h("b",{style:"color:#1E1B17"},"COLOR HUNTERS"), h("div",{class:"mcards"}, cols.slice(0,8).map(c=>h("i",{style:{borderColor:c}})))]),
+      pg("dark", [h("b",{style:"color:#7D3CC8;font-size:15px"},"PURPLE"), h("div",{class:"mframe",style:{borderColor:"#7D3CC8"}}), h("small",{style:"color:#A8A097"},"HUNTED BY"), h("b",{style:"font-size:10px"},"SEAN")]),
+      pg("cream", [h("div",{class:"mgrid"}, tiles(4,0))]),
+      pg("cream", [h("small",{style:"color:#1E1B17"},"ALL 12 PURPLE FINDS"), h("div",{class:"mgrid5"}, tiles(12,3))])));
+}
+function siteFooter(){
+  return h("div",{class:"footer"},
+    h("div",{class:"row",style:"justify-content:center"}, h("span",{class:"dots"}, ["#E23B3B","#F6C324","#2D6FD8","#2E9E5B","#F06EAA","#F57C1F","#7D3CC8","#1FB5AC","#1E1B17"].map(c=>h("i",{style:{background:c}})))),
+    siteUrl() ? h("button",{class:"btn soft",onclick:shareSite},"↗︎  Share Color Hunt with friends") : null,
+    h("p",{class:"muted small"},"Made for road trips, holidays, reunions and everything in between."));
 }
 
 /* ==================== CREATE ==================== */
 function viewCreate(){
   if (!S.db) return noDbView();
+  if (AUTH && !S.account) return h("div",{class:"wrap stack-lg"},
+    h("div",{class:"topbar"}, brand(), h("a",{class:"btn ghost sm",href:"#"},"Cancel")),
+    h("div",{class:"card stack",style:"text-align:center;padding:30px 20px"},
+      h("div",{class:"hero-swatches",style:"margin:0 0 4px"}, PALETTES[0].colors.map((c,i)=>h("i",{style:{background:c[1],height:"44px","--rot":((i%2?1:-1)*(2+i%3))+"deg"}}))),
+      h("h2",null,"Sign in to start a hunt"),
+      h("p",{class:"muted"},"Your account keeps track of the hunts you organize, so you can manage them from any device."),
+      h("button",{class:"btn lg block",onclick:()=>openSignIn("Start a hunt")},"Sign in or create an account")));
   const st = { preset:"rainbow", included:new Set(PALETTES[0].colors.map(c=>c[1])), custom:[], mode:"choose", unique:true, allowCustom:false, max:20 };
   const title = h("input",{placeholder:"e.g. Smith Family Beach Week", maxlength:"60"});
   const occasion = h("input",{placeholder:"e.g. Gulf Shores, Alabama", maxlength:"60"});
@@ -507,6 +653,7 @@ async function createHunt(data){
     if (snap.exists) continue;
     await tryWrite(()=>ref.set({...data, code, createdBy:S.uid, createdAt:Date.now(), status:"open"}));
     rememberHunt({code, title:data.title});
+    recordMyHunt(code, data.title, "organizer");
     return code;
   }
   throw new Error("Couldn't find a free code — please try again.");
@@ -546,7 +693,7 @@ function viewHunt(){
   if (mine.length>1 || (me && !closed && !S.readOnly)){
     sections.push(h("div",{class:"chips"},
       mine.map(x=>h("button",{class:"chip"+(me&&x.id===me.id?" on":""),onclick:()=>{LS.set("active."+code,x.id);renderView();}}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:x.color.hex,display:"block",boxShadow:"0 0 0 2px #fff"}}), x.name)),
-      (!closed && !S.readOnly && me) ? h("button",{class:"chip",onclick:()=>openJoin()},"+ Add a hunter") : null));
+      (!closed && !S.readOnly && me) ? h("button",{class:"chip",onclick:async()=>{ if(await requireAuth("Add a hunter")) openJoin(); }},"+ Add a hunter") : null));
   }
 
   if (me) sections.push(myPanel(me, hunt, closed));
@@ -554,7 +701,7 @@ function viewHunt(){
     h("div",{class:"hero-swatches",style:"margin:0 0 6px"}, (hunt.palette||[]).slice(0,7).map((c,i)=>h("i",{style:{background:c.hex,height:"46px","--rot":((i%2?1:-1)*(2+i%3))+"deg"}}))),
     h("h3",null,"Ready to hunt?"),
     h("p",{class:"muted"}, hunt.mode==="choose" ? "Join with your name and pick a color." : hunt.mode==="random" ? "Join with your name — your color will be a surprise." : "Join with your name and get the next color in line."),
-    h("button",{class:"btn lg block",onclick:()=>openJoin()},"Join the hunt")));
+    h("button",{class:"btn lg block",onclick:async()=>{ if(await requireAuth("Join the hunt")) openJoin(); }}, (AUTH&&!S.account)?"Sign in to join":"Join the hunt")));
   else if (closed) sections.push(h("div",{class:"notice"},"This hunt is closed to new hunters and uploads. The book is ready to view."));
 
   // book CTA
@@ -582,7 +729,7 @@ function viewHunt(){
   return h("div",{class:"wrap stack-lg"},
     h("div",{class:"topbar"}, brand(), h("div",{class:"row"},
       h("span",{class:"pill codechip"}, code),
-      h("button",{class:"btn sm",onclick:()=>openShare(false)},"Invite"))),
+      h("button",{class:"btn sm",onclick:()=>openShare(false)},"Invite"), acctBtn())),
     sections);
 }
 function safe(fn){ try{ return fn(); }catch(e){ return false; } }
@@ -611,7 +758,7 @@ function myPanel(me, hunt, closed){
       h("button",{class:"star"+(me.best===p.id?" on":""),title:"Make this my best photo","aria-label":"Mark as best",onclick:()=>setBest(me,p.id)},"★"),
       (!closed && !S.readOnly) ? h("button",{class:"del","aria-label":"Delete photo",onclick:async()=>{ if(await confirmDialog("Delete this photo?","It will be removed from the book.")) deletePhoto(p, me); }},"✕") : null,
       me.best===p.id ? h("div",{class:"bestlbl"},"Best") : null)),
-    canUpload ? h("button",{class:"ph add",onclick:()=>fileIn.click()},h("b",null,"+"),"Add") : null);
+    canUpload ? h("button",{class:"ph add",onclick:()=>{ if(AUTH&&!S.account){ requireAuth("Add photos"); return; } fileIn.click(); }},h("b",null,"+"),"Add") : null);
 
   const parts = [card];
   if (ps.length && !me.best) parts.push(h("div",{class:"banner"}, h("span",{style:"font-size:22px"},"★"), h("div",{style:"flex:1"},h("b",null,"Pick your best shot"),h("p",{class:"small muted"},"It goes on the final page of the book.")), h("button",{class:"btn sm",onclick:()=>pickBest(me)},"Pick")));
@@ -620,7 +767,7 @@ function myPanel(me, hunt, closed){
       ps.length ? h("button",{class:"btn ghost sm",onclick:()=>pickBest(me)},"★ Best") : null),
     ps.length ? null : h("p",{class:"muted"}, closed ? "Uploads are closed." : `Find things that are ${me.color.name.toLowerCase()} and add up to ${max} photos. You can crop and adjust each one.`),
     grid,
-    canUpload ? h("button",{class:"btn block lg",onclick:()=>fileIn.click()}, ps.length?`Add photos (${left} left)`:"Add your first photos") : null,
+    canUpload ? h("button",{class:"btn block lg",onclick:()=>{ if(AUTH&&!S.account){ requireAuth("Add photos"); return; } fileIn.click(); }}, ps.length?`Add photos (${left} left)`:"Add your first photos") : null,
     (!closed && left<=0) ? h("p",{class:"muted small"},"You've hit the photo limit. Delete one to swap in another.") : null,
     fileIn));
   return h("div",{class:"stack-lg"}, parts);
@@ -629,7 +776,7 @@ function myPanel(me, hunt, closed){
 /* ==================== JOIN ==================== */
 function openJoin(){
   const hunt = S.hunt; const code = S.code;
-  const st = { step:1, name:"", selfie:null, color:null, customName:"", customHex:"#1FB5AC" };
+  const st = { step:1, name:(S.hunters.some(x=>x.uid===S.uid) ? "" : accountName()), selfie:null, color:null, customName:"", customHex:"#1FB5AC" };
   const body = h("div",{class:"stack"});
   const m = openModal(body);
   const stepper = n => h("div",{class:"eyebrow"},`Step ${n} of 3`);
@@ -718,6 +865,7 @@ async function joinHunt(code, st){
   const doc = { name:st.name, color:{name:color.name, hex:color.hex}, selfie:st.selfie||null, uid:S.uid, joinedAt:Date.now(), best:null };
   await tryWrite(()=>S.db.doc(`hunts/${code}/hunters/${id}`).set(doc));
   const mine = LS.get("mine."+code, []); mine.push(id); LS.set("mine."+code, mine); LS.set("active."+code, id);
+  recordMyHunt(code, hunt.title, "hunter");
   return {id, ...doc};
 }
 function selfiePicker(onDone){
@@ -763,7 +911,7 @@ function openShare(fresh){
     link ? h("div",{class:"stack"}, h("div",{class:"eyebrow"},"Direct link"),
       h("div",{class:"row"}, h("input",{value:link,readonly:true,onfocus:e=>e.target.select()}), h("button",{class:"btn sm",onclick:()=>copyText(link)},"Copy"))) : null,
     h("button",{class:"btn soft block",onclick:()=>copyText(msg)},"Copy invite message"),
-    WEB ? h("div",{class:"notice small"},"Anyone with the code or link can join — no account needed.") : h("div",{class:"notice small"},h("b",null,"Who can join: "),"hunters need to be signed in to Claude with edit access to this page. From the page's ", h("b",null,"Share")," menu, invite each person by email as an ", h("b",null,"Editor"),". On a Team or Enterprise plan you can give your whole organization access instead.")));
+    WEB ? h("div",{class:"notice small"}, AUTH ? "Anyone with the code or link can join. Hunters sign in with their email so their photos stay with them on any device." : "Anyone with the code or link can join.") : h("div",{class:"notice small"},h("b",null,"Who can join: "),"hunters need to be signed in to Claude with edit access to this page. From the page's ", h("b",null,"Share")," menu, invite each person by email as an ", h("b",null,"Editor"),". On a Team or Enterprise plan you can give your whole organization access instead.")));
 }
 function openOrganizer(){
   const hunt=S.hunt, code=S.code;

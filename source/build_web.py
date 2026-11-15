@@ -7,7 +7,7 @@ s=s.replace('<script>/*CROPPER_JS*/</script>','<script src="config.js"></script>
 s=s.replace('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js','vendor/jspdf.umd.min.js').replace('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js','vendor/jszip.min.js')
 s=s.replace('<meta name="viewport" content="width=device-width,initial-scale=1">','<meta name="viewport" content="width=device-width,initial-scale=1">\n<meta name="theme-color" content="#F6F2EA">\n<meta property="og:title" content="Color Hunt">\n<meta property="og:description" content="Everyone gets a color. Everyone snaps what they find. Come home with a photo book.">')
 open(D+'index.html','w').write(s)
-for f in ['config.js','web-shim.js','supabase-setup.sql']: shutil.copy('/home/claude/colorhunt/web/'+f, D+f)
+for f in ['config.js','web-shim.js','supabase-setup.sql','auth-policies.sql']: shutil.copy('/home/claude/colorhunt/web/'+f, D+f)
 shutil.copy(V+'sb/package/dist/umd/supabase.js', D+'vendor/supabase.js')
 shutil.copy(V+'jspdf-2.5.2/package/dist/jspdf.umd.min.js', D+'vendor/')
 shutil.copy(V+'jszip-3.10.1/package/dist/jszip.min.js', D+'vendor/')
