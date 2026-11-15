@@ -240,6 +240,20 @@ const PALETTES = [
   {id:"mono", name:"Black & white +1", colors:[["Black","#1A1A1A"],["White","#F4F4F2"],["Gray","#8C8C8C"],["Red","#D7263D"]]},
 ];
 
+const BW = [["Black","#1A1A1A"],["White","#F4F4F2"]];
+const EXTRA_COLORS = [["Teal","#14A3A3"],["Brown","#8B5A3C"],["Gold","#D4A72C"],["Navy","#23366F"],["Lime","#9BCB3B"],["Coral","#FF7F6B"],["Maroon","#7A1F34"],["Lavender","#B79CE0"],["Mint","#8FDCC2"],["Silver","#A9ADB3"],["Magenta","#C2188B"],["Sky blue","#7EC8F0"],["Olive","#7A8B3A"],["Peach","#FFC9A3"],["Indigo","#4B3CA7"],["Turquoise","#1FB5AC"],["Black","#1A1A1A"],["White","#F4F4F2"],["Gray","#8C8C8C"],["Beige","#D9C4A0"],["Red","#E23B3B"],["Orange","#F57C1F"],["Yellow","#F6C324"],["Green","#2E9E5B"],["Blue","#2D6FD8"],["Purple","#7D3CC8"],["Pink","#F06EAA"]];
+function colorDist(a,b){ const x=hexRgb(a), y=hexRgb(b); return Math.sqrt((x[0]-y[0])**2+(x[1]-y[1])**2+(x[2]-y[2])**2); }
+function extraColors(pal, n=8){
+  const names=new Set(pal.map(c=>c.name.toLowerCase()));
+  const out=[];
+  for (const [name,hex] of EXTRA_COLORS){
+    if (names.has(name.toLowerCase())) continue;
+    if (pal.some(c=>colorDist(c.hex,hex)<55) || out.some(c=>colorDist(c.hex,hex)<55)) continue;
+    out.push({name,hex}); if (out.length>=n) break;
+  }
+  return out;
+}
+
 /* ==================== state ==================== */
 const S = {
   db:null, user:null, assets:null, downloads:null, uid:null, ready:false,
@@ -698,14 +712,16 @@ function viewCreate(){
       h("p",{class:"muted"},"Your account keeps track of the hunts you organize, so you can manage them from any device."),
       h("button",{class:"btn lg block",onclick:()=>openSignIn("Start a hunt")},"Sign in or create an account")));
   if (!S.draft) S.draft = { step:1, title:"", place:"", occasion:"", date:new Date().toLocaleString("en-US",{month:"long",year:"numeric"}), tagline:"", note:"",
-    preset:"rainbow", included:PALETTES[0].colors.map(c=>c[1]), custom:[], mode:"choose", unique:true, allowCustom:false, max:20, extras:false };
+    preset:"rainbow", included:[...PALETTES[0].colors.map(c=>c[1]), ...BW.map(c=>c[1])], bw:true, custom:[], mode:"choose", unique:true, allowCustom:false, max:20, extras:false };
   const st = S.draft;
   const root = h("div",{class:"wrap stack-lg"});
   const OCCASIONS = ["Vacation","Road trip","Holiday","Birthday","Wedding","Reunion","Field trip","Team event"];
   const STEPS = ["Name it","Pick colors","Set the rules"];
   const field = (label, input, hint, optional)=>h("label",{class:"field"},h("span",null,label," ",optional?h("span",{class:"muted",style:"font-weight:400"},"(optional)"):null),input,hint?h("div",{class:"hint"},hint):null);
   const bind = (el,key)=>{ el.value=st[key]||""; el.addEventListener("input",()=>{ st[key]=el.value; }); return el; };
-  const currentPalette = ()=>{ const p=PALETTES.find(x=>x.id===st.preset); return [...(p?p.colors:[]), ...st.custom.map(c=>[c[0],c[1],true])]; };
+  const currentPalette = ()=>{ const p=PALETTES.find(x=>x.id===st.preset); const base=p?p.colors:[];
+    const bw = st.bw ? BW.filter(b=>!base.some(c=>c[1].toUpperCase()===b[1] || c[0].toLowerCase()===b[0].toLowerCase())) : [];
+    return [...base, ...bw, ...st.custom.map(c=>[c[0],c[1],true])]; };
   const draw = ()=>{
     const nav = h("div",{class:"row",style:"gap:10px"},
       st.step>1 ? h("button",{class:"btn ghost lg",style:"flex:1",onclick:()=>{ st.step--; draw(); window.scrollTo(0,0); }},"Back") : null,
@@ -733,7 +749,7 @@ function viewCreate(){
       setTimeout(()=>{ if(!st.title) title.focus(); },60);
     } else if (st.step===2){
       const presetBox=h("div",{class:"chips"}), swatchBox=h("div",{class:"swatch-grid"});
-      const drawPresets=()=>presetBox.replaceChildren(PALETTES.map(p=>h("button",{class:"chip"+(p.id===st.preset?" on":""),type:"button",onclick:()=>{ st.preset=p.id; st.included=p.colors.map(c=>c[1]); drawPresets(); drawSwatches(); }},
+      const drawPresets=()=>presetBox.replaceChildren(PALETTES.map(p=>h("button",{class:"chip"+(p.id===st.preset?" on":""),type:"button",onclick:()=>{ st.preset=p.id; st.included=[...p.colors.map(c=>c[1]), ...(st.bw?BW.map(c=>c[1]):[])]; drawPresets(); drawSwatches(); }},
         h("span",{style:"display:inline-flex;gap:2px"}, p.colors.slice(0,4).map(c=>h("i",{style:{width:"9px",height:"9px",borderRadius:"50%",background:c[1],display:"block",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.1)"}}))), p.name)));
       const drawSwatches=()=>swatchBox.replaceChildren(currentPalette().map(([name,hex,custom])=>{ const on=st.included.includes(hex);
         return h("button",{type:"button",class:"swatch"+(on?" on":" off"),onclick:()=>{ st.included = on ? st.included.filter(x=>x!==hex) : [...st.included,hex]; drawSwatches(); }},
@@ -742,9 +758,12 @@ function viewCreate(){
       const addName=h("input",{placeholder:"Name a new color",maxlength:"20"}), addHex=h("input",{type:"color",value:"#1FB5AC"});
       const addCustom=()=>{ const name=addName.value.trim(), hex=addHex.value.toUpperCase(); if(!name){ toast("Give your color a name"); addName.focus(); return; } if(currentPalette().some(c=>c[1].toUpperCase()===hex)){ toast("That color is already in the list"); return; } st.custom.push([name,hex]); st.included=[...st.included,hex]; addName.value=""; drawSwatches(); };
       drawPresets(); drawSwatches();
+      const bwIn=h("input",{type:"checkbox",checked:st.bw,onchange:()=>{ st.bw=bwIn.checked; const hexes=BW.map(c=>c[1]); st.included = st.bw ? [...new Set([...st.included,...hexes])] : st.included.filter(x=>!hexes.includes(x)); drawSwatches(); }});
       body = h("div",{class:"card stack"},
         h("p",{class:"muted"},"Choose a palette. Tap a color to leave it out."),
-        presetBox, swatchBox,
+        presetBox,
+        h("label",{class:"toggle",style:"padding:4px 0"}, h("div",{class:"row",style:"gap:10px"}, h("span",{style:"display:inline-flex"},h("i",{style:{width:"22px",height:"22px",borderRadius:"6px",background:"#1A1A1A",display:"block"}}),h("i",{style:{width:"22px",height:"22px",borderRadius:"6px",background:"#F4F4F2",display:"block",marginLeft:"-6px",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.15)"}})), h("b",{style:"font-size:15px"},"Include black and white")), h("span",{class:"switch"},bwIn,h("i"))),
+        swatchBox,
         h("div",{class:"row"}, addHex, addName, h("button",{class:"btn soft sm",type:"button",onclick:addCustom},"Add")));
     } else {
       const modes=[["choose","🎨","Hunters pick","Everyone chooses their own color."],["random","🎲","Surprise me","Colors are handed out at random."],["order","➡️","In order","Colors go out in order as people join."]];
@@ -758,7 +777,7 @@ function viewCreate(){
         h("div",{class:"card stack"}, h("h3",null,"How does everyone get a color?"), modeBox),
         h("div",{class:"card stack"},
           h("div",{class:"row"},h("h3",null,"Photos per person"),h("span",{class:"spacer"}),maxLbl), maxIn,
-          toggle("One person per color","Turn off to let people share colors.","unique"),
+          toggle("One person per color","If every color is taken, a new color is added for the next person. Turn off to let people share.","unique"),
           toggle("Let people invent colors","Hunters can make up their own color.","allowCustom")),
         h("div",{class:"notice small"},h("b",null,"Ready? "),`"${st.title}" · ${currentPalette().filter(c=>st.included.includes(c[1])).length} colors · up to ${st.max} photos each. You'll get a 4-digit code to share.`));
     }
@@ -955,15 +974,19 @@ function openJoin(){
           custom = h("div",{class:"stack"}, h("div",{class:"eyebrow"},"Or invent your own"), h("div",{class:"row"},ci,cn,h("button",{class:"btn soft sm",onclick:()=>{ if(!cn.value.trim()){toast("Name your color");return;} st.color={name:cn.value.trim(),hex:ci.value.toUpperCase()}; st.customName=cn.value; draw(); }},"Use")));
         }
         const allTaken = hunt.unique && pal.every(c=>counts[c.hex.toLowerCase()]);
+        const extras = allTaken ? h("div",{class:"swatch-grid"}, extraColors(pal).map(c=>{ const on=st.color&&st.color.hex===c.hex;
+          return h("button",{class:"swatch"+(on?" on":""),onclick:()=>{st.color={name:c.name,hex:c.hex};draw();}}, h("span",{class:"sw",style:{background:c.hex}}), h("span",{class:"tick"},"✓"), h("span",{class:"nm"},c.name), h("span",{class:"sub"},"New color")); })) : null;
         body.replaceChildren(stepper(3), h("h2",null,"Pick your color"),
-          allTaken ? h("p",{class:"notice"},"Every color is taken — we'll pair you with the color that has the fewest hunters.") : h("p",{class:"muted"},"You'll photograph everything you can find in this color."),
+          allTaken ? h("div",{class:"notice"},h("b",null,"Every color is taken, "),"so pick a new one to add to the hunt:") : h("p",{class:"muted"},"You'll photograph everything you can find in this color."),
+          allTaken ? extras : null,
+          allTaken ? h("div",{class:"eyebrow",style:"margin-top:8px"},"Already taken") : null,
           grid, custom,
           st.color && !pal.find(c=>c.hex===st.color.hex) ? h("p",{class:"small"},"Selected: ",h("b",null,st.color.name)) : null,
           h("div",{class:"row"}, h("button",{class:"btn ghost block",onclick:()=>{st.step=2;draw();}},"Back"),
-            h("button",{class:"btn block",disabled:!(st.color||allTaken),onclick:()=>finish()},"Join hunt")));
+            h("button",{class:"btn block",disabled:!st.color,onclick:()=>finish()},"Join hunt")));
       } else {
         body.replaceChildren(stepper(3), h("h2",null, hunt.mode==="random"?"Your color is a surprise":"Your color is next in line"),
-          h("p",{class:"muted"},"Tap below to find out what you're hunting for."),
+          h("p",{class:"muted"}, (hunt.unique && pal.every(c=>counts[c.hex.toLowerCase()])) ? "Every color is taken, so you'll get a brand-new one. Tap to see it!" : "Tap below to find out what you're hunting for."),
           h("div",{class:"hero-swatches",style:"margin:18px 0"}, pal.map((c,i)=>h("i",{style:{background:c.hex,height:"54px","--rot":((i%2?1:-1)*(2+i%3))+"deg",opacity:(hunt.unique&&counts[c.hex.toLowerCase()])?.25:1}}))),
           h("div",{class:"row"}, h("button",{class:"btn ghost block",onclick:()=>{st.step=2;draw();}},"Back"), h("button",{class:"btn block lg",onclick:()=>finish()},"Reveal my color")));
       }
@@ -993,19 +1016,28 @@ async function joinHunt(code, st){
     await sleep(500+Math.random()*500);
   }
   const fresh = (await S.db.collection(`hunts/${code}/hunters`).get()).docs.map(d=>({id:d.id,...d.data()}));
-  const hunt = S.hunt; const pal = hunt.palette||[];
+  const hunt = S.hunt;
+  const pal = [...(((await S.db.doc("hunts/"+code).get()).data()||hunt).palette||hunt.palette||[])];
   const counts = colorCounts(fresh);
+  const allUsed = pal.length>0 && pal.every(c=>counts[c.hex.toLowerCase()]);
   const least = ()=>{ const min = Math.min(...pal.map(c=>counts[c.hex.toLowerCase()]||0)); return pal.filter(c=>(counts[c.hex.toLowerCase()]||0)===min); };
   let color = st.color;
   if (hunt.mode==="choose"){
     if (color && hunt.unique && counts[color.hex.toLowerCase()] && pal.find(c=>c.hex===color.hex)){ const e=new Error("Someone just grabbed "+color.name+". Pick another color."); throw e; }
-    if (!color){ const pool=least(); color = pool[0]; }
+    if (!color){ color = (hunt.unique && allUsed) ? extraColors(pal,1)[0] : least()[0]; }
+  } else if (hunt.unique && allUsed){
+    const ex = extraColors(pal, hunt.mode==="random"?6:1); color = ex[hunt.mode==="random"?Math.floor(Math.random()*ex.length):0];
   } else if (hunt.mode==="random"){
     const pool = least(); color = pool[Math.floor(Math.random()*pool.length)];
   } else {
     color = least()[0];
   }
+  if (!color) color = least()[0];
   if (!color) throw new Error("This hunt has no colors set up.");
+  if (!pal.find(c=>c.hex.toLowerCase()===color.hex.toLowerCase())){
+    pal.push({name:color.name, hex:color.hex.toUpperCase()});
+    try{ await tryWrite(()=>S.db.doc("hunts/"+code).update({palette:pal})); }catch(e){ console.warn(e); }
+  }
   const id = rid();
   const doc = { name:st.name, color:{name:color.name, hex:color.hex}, selfie:st.selfie||null, uid:S.uid, joinedAt:Date.now(), best:null };
   await tryWrite(()=>S.db.doc(`hunts/${code}/hunters/${id}`).set(doc));
