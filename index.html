@@ -148,6 +148,22 @@ label.field>span{display:block;font-size:13px;font-weight:600;margin-bottom:7px}
 .mgrid5{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;width:90%}.mgrid5 i{aspect-ratio:1;border-radius:2px}
 .oauth{gap:10px;font-weight:600}.oauth .oic{display:inline-flex}
 .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
+.stepbar{display:flex;gap:6px}.stepbar i{flex:1;height:6px;border-radius:99px;background:#E2DACD}.stepbar i.on{background:var(--ink)}
+#bnav{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(255,253,249,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;justify-content:center;gap:4px;padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+#bnav .nb{flex:1;max-width:120px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border-radius:14px;font-size:12px;font-weight:600;color:var(--muted)}
+#bnav .nb.on{color:var(--ink)}
+#bnav .nb.on .ni{background:#EFE8DC}
+#bnav .ni{display:flex;align-items:center;justify-content:center;width:46px;height:30px;border-radius:99px}
+#bnav .nbplus .ni{background:var(--ink);color:#fff}
+#bnav .nbplus{color:var(--ink)}
+body.hasnav .wrap{padding-bottom:120px}
+body.hasnav #toasts{bottom:calc(86px + env(safe-area-inset-bottom))}
+.libcard{padding:0;overflow:hidden}
+.libtop{display:block;text-decoration:none}
+.libstrip{display:flex;height:14px}.libstrip i{flex:1}
+.ph .loc{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.6));color:#fff;font-size:10px;font-weight:600;padding:12px 6px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand{white-space:nowrap}
+@media(max-width:440px){.topbar.tight .bt{display:none}}
 /* modals */
 #modals .ov{position:fixed;inset:0;background:rgba(20,17,13,.55);display:flex;align-items:flex-end;justify-content:center;z-index:50;animation:fade .2s}
 .sheet{background:var(--card);width:100%;max-width:560px;max-height:94vh;overflow:auto;border-radius:24px 24px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:up .28s cubic-bezier(.2,.9,.3,1);position:relative}
@@ -443,6 +459,7 @@ async function init(){
 function parseRoute(){
   const x = (location.hash||"").replace(/^#/,""); let m;
   if (x==="create") return {v:"create"};
+  if (x==="library") return {v:"library"};
   if ((m = x.match(/^h(\d{4})(-book)?$/))) return {v: m[2] ? "book" : "hunt", code:m[1]};
   return {v:"home"};
 }
@@ -481,10 +498,12 @@ function renderView(){
   let node;
   if (!S.ready) node = loadingView("Opening Color Hunt…");
   else if (v==="create") node = viewCreate();
+  else if (v==="library") node = viewLibrary();
   else if (v==="hunt") node = viewHunt();
   else if (v==="book") node = viewBook();
   else node = viewHome();
   $("#app").replaceChildren(node);
+  renderNav();
   renderUploadPill();
 }
 function renderUploadPill(){
@@ -504,14 +523,14 @@ function photosOf(hu){
 function myHunters(){ const local = LS.get("mine."+S.code, []); return sortedHunters().filter(x=>x.uid===S.uid || local.includes(x.id)); }
 function rememberHunt(hunt){
   const list = LS.get("recent", []).filter(x=>x.code!==hunt.code);
-  list.unshift({code:hunt.code, title:hunt.title}); LS.set("recent", list.slice(0,12));
+  list.unshift({code:hunt.code, title:hunt.title, at:Date.now()}); LS.set("recent", list.slice(0,12));
 }
 function colorCounts(hunters){ const m={}; hunters.forEach(x=>{ if(x.color){ const k=x.color.hex.toLowerCase(); m[k]=(m[k]||0)+1; } }); return m; }
 
 /* ==================== shared view bits ==================== */
 function brand(){
   const cols = ["#E23B3B","#F6C324","#2D6FD8","#2E9E5B","#F06EAA","#F57C1F","#7D3CC8","#1FB5AC","#1E1B17"];
-  return h("a",{class:"brand",href:"#",onclick:e=>{e.preventDefault();go("");}}, h("span",{class:"dots"}, cols.map(c=>h("i",{style:{background:c}}))), "Color Hunt");
+  return h("a",{class:"brand",href:"#",onclick:e=>{e.preventDefault();go("");}}, h("span",{class:"dots"}, cols.map(c=>h("i",{style:{background:c}}))), h("span",{class:"bt"},"Color Hunt"));
 }
 function loadingView(text){ return h("div",{class:"wrap"}, h("div",{class:"topbar"},brand()), h("div",{class:"empty"}, h("span",{class:"spin dk"}), h("p",{style:"margin-top:12px"},text))); }
 function noDbView(){
@@ -535,8 +554,8 @@ function viewHome(){
     const all = [...recent];
     (S.myHunts||[]).forEach(x=>{ if(!all.find(y=>y.code===x.code)) all.push(x); });
     if (!all.length){ listBox.replaceChildren(); return; }
-    listBox.replaceChildren(h("div",{class:"card"}, h("div",{class:"eyebrow",style:"margin-bottom:6px"},"Your hunts"),
-      all.slice(0,10).map(x=>h("a",{class:"list-item",href:"#h"+x.code},
+    listBox.replaceChildren(h("div",{class:"card"}, h("div",{class:"row",style:"margin-bottom:6px"},h("div",{class:"eyebrow"},"Your hunts"),h("span",{class:"spacer"}),h("a",{href:"#library",class:"small",style:"font-weight:600"},"See all ›")),
+      all.slice(0,4).map(x=>h("a",{class:"list-item",href:"#h"+x.code},
         h("span",{class:"pill codechip",style:"font-size:14px;padding:6px 10px"},x.code),
         h("span",{style:"font-weight:600"},x.title||"Color hunt"), h("span",{class:"spacer"}), h("span",{class:"muted"},"›")))));
   };
@@ -597,6 +616,77 @@ function siteFooter(){
     h("p",{class:"muted small"},"Made for road trips, holidays, reunions and everything in between."));
 }
 
+/* ==================== LIBRARY ==================== */
+async function loadLibrary(){
+  const uid=S.uid, m=new Map();
+  const add=(x,role)=>{ const prev=m.get(x.code); const rank={organizer:3,hunter:2,viewed:1};
+    if(!prev || rank[role]>rank[prev.role]) m.set(x.code,{code:x.code,title:x.title,role,at:Math.max(x.at||0,prev?prev.at:0)}); else prev.at=Math.max(prev.at||0,x.at||0); };
+  LS.get("recent",[]).forEach((x,i)=>add({...x,at:x.at||(Date.now()-i*1000)},"viewed"));
+  const [own, mine] = await Promise.all([
+    S.db.collection("hunts").where("createdBy","==",uid).limit(50).get().then(s=>s.docs.map(d=>({code:d.id,title:d.data().title,at:d.data().createdAt}))).catch(()=>[]),
+    S.account ? S.db.doc("users/"+uid).get().then(s=>(s.exists&&s.data().hunts)||[]).catch(()=>[]) : Promise.resolve([])
+  ]);
+  mine.forEach(x=>add(x,x.role||"hunter")); own.forEach(x=>add(x,"organizer"));
+  const list=[...m.values()].sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,40);
+  const docs=await Promise.all(list.map(x=>S.db.doc("hunts/"+x.code).get().then(s=>s.exists?s.data():null).catch(()=>null)));
+  return list.map((x,i)=>docs[i]?{...x,hunt:docs[i]}:null).filter(Boolean);
+}
+function viewLibrary(){
+  if (!S.db) return noDbView();
+  const box=h("div",{class:"stack-lg"}, h("div",{class:"empty"},h("span",{class:"spin dk"}),h("p",{style:"margin-top:10px"},"Loading your hunts…")));
+  const filters=[["all","All"],["organizer","Organizing"],["hunter","Joined"],["viewed","Viewed"]];
+  let items=[], filter="all";
+  const chips=h("div",{class:"chips"});
+  const draw=()=>{
+    chips.replaceChildren(filters.map(([k,l])=>h("button",{class:"chip"+(filter===k?" on":""),onclick:()=>{filter=k;draw();}},l)));
+    const shown=items.filter(x=>filter==="all"||x.role===filter);
+    if (!items.length){ box.replaceChildren(h("div",{class:"card stack",style:"text-align:center;padding:30px 20px"},
+      h("div",{class:"hero-swatches",style:"margin:0 0 4px"}, PALETTES[0].colors.map((c,i)=>h("i",{style:{background:c[1],height:"40px","--rot":((i%2?1:-1)*(2+i%3))+"deg"}}))),
+      h("h3",null,"No hunts yet"), h("p",{class:"muted"},"Hunts you start, join or open will show up here."),
+      h("button",{class:"btn lg block",onclick:()=>go("create")},"Start a hunt"), h("button",{class:"btn ghost block",onclick:()=>go("")},"Join with a code"))); return; }
+    box.replaceChildren(shown.length ? shown.map(libCard) : h("p",{class:"muted",style:"text-align:center"},"Nothing here yet."));
+  };
+  loadLibrary().then(r=>{ items=r; if(S.route.v==="library") draw(); }).catch(()=>{ items=[]; draw(); });
+  return h("div",{class:"wrap stack-lg"},
+    h("div",{class:"topbar"}, brand(), acctBtn()),
+    h("div",null, h("div",{class:"eyebrow"},"Library"), h("h2",{style:"margin-top:6px"},"Your hunts")),
+    (AUTH && !S.account) ? h("div",{class:"notice small row"}, h("span",{style:"flex:1"},"Sign in to see your hunts on every device."), h("button",{class:"btn sm",onclick:()=>openSignIn("Your library")},"Sign in")) : null,
+    chips, box);
+}
+function libCard(x){
+  const hu=x.hunt, pal=(hu.palette||[]).slice(0,10);
+  const role={organizer:"Organizer",hunter:"Hunter",viewed:"Viewed"}[x.role];
+  return h("div",{class:"card libcard"},
+    h("a",{href:"#h"+x.code,class:"libtop"},
+      h("div",{class:"libstrip"}, pal.map(c=>h("i",{style:{background:c.hex}}))),
+      h("div",{style:"padding:14px 16px 4px"},
+        h("div",{class:"row",style:"gap:8px;margin-bottom:6px"}, h("span",{class:"pill",style:"padding:3px 9px;font-size:12px"},role), hu.status==="closed"?h("span",{class:"pill",style:"padding:3px 9px;font-size:12px"},"Finished"):null, h("span",{class:"spacer"}), h("span",{class:"muted small",style:"letter-spacing:.12em;font-weight:600"},x.code)),
+        h("h3",null,hu.title||"Color hunt"),
+        h("p",{class:"muted small"},[hu.place||"",hu.occasion||"",hu.date||""].filter(Boolean).join(" · ")||" "))),
+    h("div",{class:"row",style:"padding:10px 16px 14px;gap:8px"},
+      h("a",{class:"btn sm",href:"#h"+x.code},"Open"),
+      h("a",{class:"btn soft sm",href:"#h"+x.code+"-book"},"📖 Book")));
+}
+const NAV_ICONS={
+  home:'<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+  library:'<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  user:'<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>'
+};
+function renderNav(){
+  let nav=$("#bnav");
+  const v=S.route.v;
+  if (!S.ready || !S.db || v==="create"){ if(nav) nav.remove(); document.body.classList.remove("hasnav"); return; }
+  if (!nav){ nav=h("nav",{id:"bnav","aria-label":"Main menu"}); document.body.append(nav); }
+  document.body.classList.add("hasnav");
+  const item=(key,label,icon,on,fn,cls)=>{ const b=h("button",{class:"nb"+(on?" on":"")+(cls?" "+cls:""),onclick:fn,"aria-label":label}); const ic=h("span",{class:"ni"}); ic.innerHTML=NAV_ICONS[icon]; b.append(ic,h("span",null,label)); return b; };
+  nav.replaceChildren(
+    item("home","Home","home",v==="home",()=>go("")),
+    item("library","Library","library",v==="library",()=>go("library")),
+    item("new","New hunt","plus",false,()=>go("create"),"nbplus"),
+    AUTH ? item("acct", S.account?"Account":"Sign in","user",false,()=>S.account?openAccount():openSignIn()) : null);
+}
+
 /* ==================== CREATE ==================== */
 function viewCreate(){
   if (!S.db) return noDbView();
@@ -607,80 +697,89 @@ function viewCreate(){
       h("h2",null,"Sign in to start a hunt"),
       h("p",{class:"muted"},"Your account keeps track of the hunts you organize, so you can manage them from any device."),
       h("button",{class:"btn lg block",onclick:()=>openSignIn("Start a hunt")},"Sign in or create an account")));
-  const st = { preset:"rainbow", included:new Set(PALETTES[0].colors.map(c=>c[1])), custom:[], mode:"choose", unique:true, allowCustom:false, max:20 };
-  const title = h("input",{placeholder:"e.g. Smith Family Beach Week", maxlength:"60"});
-  const occasion = h("input",{placeholder:"e.g. Gulf Shores, Alabama", maxlength:"60"});
-  const now = new Date();
-  const date = h("input",{value: now.toLocaleString("en-US",{month:"long",year:"numeric"}), maxlength:"40"});
-  const tagline = h("input",{placeholder:"e.g. Color hunting with the Racks family", maxlength:"60"});
-  const note = h("input",{placeholder:"e.g. Fun fact: …", maxlength:"140"});
-  const presetBox = h("div",{class:"chips"});
-  const swatchBox = h("div",{class:"swatch-grid"});
-  const modeBox = h("div",{class:"mode-cards"});
-  const maxLbl = h("b",null,"20");
-  const maxIn = h("input",{type:"range",min:"5",max:"20",step:"1",value:"20",oninput:()=>{st.max=+maxIn.value; maxLbl.textContent=maxIn.value;}});
-  const currentPalette = ()=>{
-    const p = PALETTES.find(x=>x.id===st.preset);
-    return [...(p?p.colors:[]), ...st.custom.map(c=>[c[0],c[1],true])];
+  if (!S.draft) S.draft = { step:1, title:"", place:"", occasion:"", date:new Date().toLocaleString("en-US",{month:"long",year:"numeric"}), tagline:"", note:"",
+    preset:"rainbow", included:PALETTES[0].colors.map(c=>c[1]), custom:[], mode:"choose", unique:true, allowCustom:false, max:20, extras:false };
+  const st = S.draft;
+  const root = h("div",{class:"wrap stack-lg"});
+  const OCCASIONS = ["Vacation","Road trip","Holiday","Birthday","Wedding","Reunion","Field trip","Team event"];
+  const STEPS = ["Name it","Pick colors","Set the rules"];
+  const field = (label, input, hint, optional)=>h("label",{class:"field"},h("span",null,label," ",optional?h("span",{class:"muted",style:"font-weight:400"},"(optional)"):null),input,hint?h("div",{class:"hint"},hint):null);
+  const bind = (el,key)=>{ el.value=st[key]||""; el.addEventListener("input",()=>{ st[key]=el.value; }); return el; };
+  const currentPalette = ()=>{ const p=PALETTES.find(x=>x.id===st.preset); return [...(p?p.colors:[]), ...st.custom.map(c=>[c[0],c[1],true])]; };
+  const draw = ()=>{
+    const nav = h("div",{class:"row",style:"gap:10px"},
+      st.step>1 ? h("button",{class:"btn ghost lg",style:"flex:1",onclick:()=>{ st.step--; draw(); window.scrollTo(0,0); }},"Back") : null,
+      st.step<3 ? h("button",{class:"btn lg",style:"flex:2",onclick:()=>{ if(st.step===1 && !st.title.trim()){ toast("Give your hunt a name"); return; } if(st.step===2 && !currentPalette().some(c=>st.included.includes(c[1]))){ toast("Pick at least one color"); return; } st.step++; draw(); window.scrollTo(0,0); }},"Next") : null,
+      st.step===3 ? createBtn() : null);
+    let body;
+    if (st.step===1){
+      const title = bind(h("input",{placeholder:"e.g. Smith Family Beach Week",maxlength:"60"}),"title");
+      const place = bind(h("input",{placeholder:"e.g. Gulf Shores, Alabama",maxlength:"60",autocomplete:"off"}),"place");
+      const occ = bind(h("input",{placeholder:"e.g. Summer vacation",maxlength:"40"}),"occasion");
+      const occChips = h("div",{class:"chips"}, OCCASIONS.map(o=>h("button",{type:"button",class:"chip"+(st.occasion===o?" on":""),onclick:()=>{ st.occasion = st.occasion===o ? "" : o; occ.value=st.occasion; occChips.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on", c.textContent===st.occasion)); }},o)));
+      const date = bind(h("input",{maxlength:"40"}),"date");
+      const tagline = bind(h("input",{placeholder:"e.g. Color hunting with the Racks family",maxlength:"60"}),"tagline");
+      const note = bind(h("input",{placeholder:"e.g. Fun fact: …",maxlength:"140"}),"note");
+      const extras = h("div",{class:"stack",style:{display:st.extras?"block":"none"}},
+        field("Book tagline", tagline, "Under the title on the cover.", true),
+        field("Note for the book", note, "A fun line on the Meet the Color Hunters page.", true));
+      body = h("div",{class:"card stack"},
+        field("Hunt name", title),
+        field("Where", place, null, true),
+        h("div",null, field("Occasion", occ, null, true), h("div",{style:"margin-top:8px"},occChips)),
+        field("Date", date),
+        h("button",{type:"button",class:"btn ghost sm",style:"align-self:flex-start",onclick:e=>{ st.extras=!st.extras; extras.style.display=st.extras?"block":"none"; e.currentTarget.textContent=st.extras?"− Hide book extras":"+ Book extras (optional)"; }}, st.extras?"− Hide book extras":"+ Book extras (optional)"),
+        extras);
+      setTimeout(()=>{ if(!st.title) title.focus(); },60);
+    } else if (st.step===2){
+      const presetBox=h("div",{class:"chips"}), swatchBox=h("div",{class:"swatch-grid"});
+      const drawPresets=()=>presetBox.replaceChildren(PALETTES.map(p=>h("button",{class:"chip"+(p.id===st.preset?" on":""),type:"button",onclick:()=>{ st.preset=p.id; st.included=p.colors.map(c=>c[1]); drawPresets(); drawSwatches(); }},
+        h("span",{style:"display:inline-flex;gap:2px"}, p.colors.slice(0,4).map(c=>h("i",{style:{width:"9px",height:"9px",borderRadius:"50%",background:c[1],display:"block",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.1)"}}))), p.name)));
+      const drawSwatches=()=>swatchBox.replaceChildren(currentPalette().map(([name,hex,custom])=>{ const on=st.included.includes(hex);
+        return h("button",{type:"button",class:"swatch"+(on?" on":" off"),onclick:()=>{ st.included = on ? st.included.filter(x=>x!==hex) : [...st.included,hex]; drawSwatches(); }},
+          h("span",{class:"sw",style:{background:hex}}), h("span",{class:"tick"},"✓"), h("span",{class:"nm"},name),
+          h("span",{class:"sub"}, custom ? h("span",{style:"text-decoration:underline",onclick:e=>{ e.stopPropagation(); st.custom=st.custom.filter(c=>c[1]!==hex); st.included=st.included.filter(x=>x!==hex); drawSwatches(); }},"remove") : (on?"Included":"Tap to add"))); }));
+      const addName=h("input",{placeholder:"Name a new color",maxlength:"20"}), addHex=h("input",{type:"color",value:"#1FB5AC"});
+      const addCustom=()=>{ const name=addName.value.trim(), hex=addHex.value.toUpperCase(); if(!name){ toast("Give your color a name"); addName.focus(); return; } if(currentPalette().some(c=>c[1].toUpperCase()===hex)){ toast("That color is already in the list"); return; } st.custom.push([name,hex]); st.included=[...st.included,hex]; addName.value=""; drawSwatches(); };
+      drawPresets(); drawSwatches();
+      body = h("div",{class:"card stack"},
+        h("p",{class:"muted"},"Choose a palette. Tap a color to leave it out."),
+        presetBox, swatchBox,
+        h("div",{class:"row"}, addHex, addName, h("button",{class:"btn soft sm",type:"button",onclick:addCustom},"Add")));
+    } else {
+      const modes=[["choose","🎨","Hunters pick","Everyone chooses their own color."],["random","🎲","Surprise me","Colors are handed out at random."],["order","➡️","In order","Colors go out in order as people join."]];
+      const modeBox=h("div",{class:"mode-cards"});
+      const drawModes=()=>modeBox.replaceChildren(modes.map(([id,ic,t,d])=>h("button",{type:"button",class:"mode-card"+(st.mode===id?" on":""),onclick:()=>{st.mode=id;drawModes();}},h("span",{class:"ic"},ic),h("div",null,h("b",null,t),h("span",null,d)))));
+      drawModes();
+      const toggle=(label,sub,key)=>{ const inp=h("input",{type:"checkbox",checked:st[key],onchange:()=>{st[key]=inp.checked;}}); return h("label",{class:"toggle"}, h("div",null,h("b",{style:"display:block;font-size:15px"},label),h("span",{class:"muted small"},sub)), h("span",{class:"switch"},inp,h("i"))); };
+      const maxLbl=h("b",null,String(st.max));
+      const maxIn=h("input",{type:"range",min:"5",max:"20",step:"1",value:String(st.max),oninput:()=>{st.max=+maxIn.value; maxLbl.textContent=maxIn.value;}});
+      body = h("div",{class:"stack-lg"},
+        h("div",{class:"card stack"}, h("h3",null,"How does everyone get a color?"), modeBox),
+        h("div",{class:"card stack"},
+          h("div",{class:"row"},h("h3",null,"Photos per person"),h("span",{class:"spacer"}),maxLbl), maxIn,
+          toggle("One person per color","Turn off to let people share colors.","unique"),
+          toggle("Let people invent colors","Hunters can make up their own color.","allowCustom")),
+        h("div",{class:"notice small"},h("b",null,"Ready? "),`"${st.title}" · ${currentPalette().filter(c=>st.included.includes(c[1])).length} colors · up to ${st.max} photos each. You'll get a 4-digit code to share.`));
+    }
+    root.replaceChildren(
+      h("div",{class:"topbar"}, brand(), h("button",{class:"btn ghost sm",onclick:()=>{ S.draft=null; go(""); }},"Cancel")),
+      h("div",null,
+        h("div",{class:"eyebrow"},`Step ${st.step} of 3`),
+        h("h2",{style:"margin:6px 0 12px"}, STEPS[st.step-1]),
+        h("div",{class:"stepbar"}, STEPS.map((_,i)=>h("i",{class:i<st.step?"on":""})))),
+      body, nav);
   };
-  const drawPresets = ()=>presetBox.replaceChildren(...PALETTES.map(p=>h("button",{class:"chip"+(p.id===st.preset?" on":""),type:"button",onclick:()=>{ st.preset=p.id; st.included=new Set(p.colors.map(c=>c[1])); drawPresets(); drawSwatches(); }},
-    h("span",{style:"display:inline-flex;gap:2px"}, p.colors.slice(0,4).map(c=>h("i",{style:{width:"9px",height:"9px",borderRadius:"50%",background:c[1],display:"block",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.1)"}}))), p.name)));
-  const addName = h("input",{placeholder:"Color name",maxlength:"20"});
-  const addHex = h("input",{type:"color",value:"#1FB5AC"});
-  const drawSwatches = ()=>{
-    swatchBox.replaceChildren(...currentPalette().map(([name,hex,custom])=>{
-      const on = st.included.has(hex);
-      return h("button",{type:"button",class:"swatch"+(on?" on":" off"),onclick:()=>{ if(on) st.included.delete(hex); else st.included.add(hex); drawSwatches(); }},
-        h("span",{class:"sw",style:{background:hex}}), h("span",{class:"tick"},"✓"),
-        h("span",{class:"nm"},name), h("span",{class:"sub"}, custom ? h("span",{style:"text-decoration:underline",onclick:e=>{e.stopPropagation(); st.custom=st.custom.filter(c=>c[1]!==hex); st.included.delete(hex); drawSwatches();}},"remove") : hex.toUpperCase()));
-    }));
-  };
-  const addCustom = ()=>{
-    const name = addName.value.trim(); const hex = addHex.value.toUpperCase();
-    if (!name){ toast("Give your color a name"); addName.focus(); return; }
-    if (currentPalette().some(c=>c[1].toUpperCase()===hex)){ toast("That color is already in the list"); return; }
-    st.custom.push([name,hex]); st.included.add(hex); addName.value=""; drawSwatches();
-  };
-  const modes = [
-    ["choose","🎨","Hunters pick","Each person chooses their own color when they join."],
-    ["random","🎲","Surprise me","Colors are assigned at random — with a fun reveal."],
-    ["order","➡️","In order","Colors are handed out in palette order as people join."]];
-  const drawModes = ()=>modeBox.replaceChildren(...modes.map(([id,ic,t,d])=>h("button",{type:"button",class:"mode-card"+(st.mode===id?" on":""),onclick:()=>{st.mode=id;drawModes();}},h("span",{class:"ic"},ic),h("div",null,h("b",null,t),h("span",null,d)))));
-  const toggle = (label, sub, key)=>{ const inp=h("input",{type:"checkbox",checked:st[key],onchange:()=>{st[key]=inp.checked;}}); return h("label",{class:"toggle"}, h("div",null,h("b",{style:"display:block;font-size:15px"},label),h("span",{class:"muted small"},sub)), h("span",{class:"switch"},inp,h("i"))); };
-  drawPresets(); drawSwatches(); drawModes();
-
-  const createBtn = h("button",{class:"btn lg block",onclick:async()=>{
-    const pal = currentPalette().filter(c=>st.included.has(c[1])).map(c=>({name:c[0],hex:c[1].toUpperCase()}));
-    if (!title.value.trim()){ toast("Give your hunt a name"); title.focus(); return; }
-    if (pal.length<1){ toast("Include at least one color"); return; }
-    createBtn.disabled=true; createBtn.replaceChildren(h("span",{class:"spin"})," Creating…");
+  const createBtn = ()=>{ const b=h("button",{class:"btn lg",style:"flex:2",onclick:async()=>{
+    const pal=currentPalette().filter(c=>st.included.includes(c[1])).map(c=>({name:c[0],hex:c[1].toUpperCase()}));
+    b.disabled=true; b.replaceChildren(h("span",{class:"spin"})," Creating…");
     try{
-      const code = await createHunt({ title:title.value.trim(), occasion:occasion.value.trim(), date:date.value.trim(), tagline:tagline.value.trim(), note:note.value.trim(), palette:pal, mode:st.mode, unique:st.unique, allowCustom:st.allowCustom, maxPhotos:st.max });
-      S.justCreated = code; go("h"+code);
-    }catch(e){ toast(errMsg(e), 5000); createBtn.disabled=false; createBtn.textContent="Create hunt"; }
-  }},"Create hunt");
-
-  return h("div",{class:"wrap stack-lg"},
-    h("div",{class:"topbar"}, brand(), h("a",{class:"btn ghost sm",href:"#"},"Cancel")),
-    h("div",null, h("div",{class:"eyebrow"},"New hunt"), h("h2",{style:"margin-top:6px"},"Set up your color hunt")),
-    h("div",{class:"card stack"},
-      h("label",{class:"field"},h("span",null,"Hunt name"),title),
-      h("label",{class:"field"},h("span",null,"Where / occasion ",h("span",{class:"muted",style:"font-weight:400"},"(optional)")),occasion),
-      h("label",{class:"field"},h("span",null,"Date"),date),
-      h("label",{class:"field"},h("span",null,"Book tagline ",h("span",{class:"muted",style:"font-weight:400"},"(optional)")),tagline,h("div",{class:"hint"},"Shown under the title on the cover and on the last page.")),
-      h("label",{class:"field"},h("span",null,"Note for the book ",h("span",{class:"muted",style:"font-weight:400"},"(optional)")),note,h("div",{class:"hint"},"A fun fact or line at the bottom of the Meet the Color Hunters page."))),
-    h("div",{class:"card stack"},
-      h("div",null,h("h3",null,"Colors"),h("p",{class:"muted small",style:"margin-top:4px"},"Start from a palette, tap colors to include or leave out, or add your own.")),
-      presetBox, swatchBox,
-      h("div",{class:"row"}, addHex, addName, h("button",{class:"btn soft sm",type:"button",onclick:addCustom},"Add"))),
-    h("div",{class:"card stack"},
-      h("h3",null,"How colors are given out"), modeBox,
-      toggle("One hunter per color","When off, people can share a color.","unique"),
-      toggle("Allow custom colors","Hunters can invent their own color when picking.","allowCustom")),
-    h("div",{class:"card stack"},
-      h("div",{class:"row"},h("h3",null,"Photos per hunter"),h("span",{class:"spacer"}),maxLbl),
-      maxIn, h("p",{class:"hint"},"Up to 20. Fewer photos make a tighter book.")),
-    createBtn);
+      const code=await createHunt({ title:st.title.trim(), place:st.place.trim(), occasion:st.occasion.trim(), date:st.date.trim(), tagline:st.tagline.trim(), note:st.note.trim(), palette:pal, mode:st.mode, unique:st.unique, allowCustom:st.allowCustom, maxPhotos:st.max });
+      S.draft=null; S.justCreated=code; go("h"+code);
+    }catch(e){ toast(errMsg(e),5000); b.disabled=false; b.textContent="Create hunt"; }
+  }},"Create hunt"); return b; };
+  draw();
+  return root;
 }
 async function createHunt(data){
   for (let i=0;i<14;i++){
@@ -717,7 +816,7 @@ function viewHunt(){
   const totalPhotos = S.photos.length;
 
   const header = h("div",null,
-    h("div",{class:"eyebrow"}, [hunt.occasion, hunt.date].filter(Boolean).join(" · ") || "Color hunt"),
+    h("div",{class:"eyebrow"}, [hunt.place, hunt.occasion, hunt.date].filter(Boolean).join(" · ") || "Color hunt"),
     h("h2",{style:"margin:6px 0 10px"}, hunt.title || "Color Hunt"),
     h("div",{class:"row wrap-row"},
       h("span",{class:"pill"}, `${H.length} hunter${H.length===1?"":"s"}`),
@@ -764,10 +863,15 @@ function viewHunt(){
         h("span",{class:"muted small",style:"min-width:42px;text-align:right"}, `${n}/${max}`));
     }) : h("p",{class:"muted",style:"padding:10px 0"},"No one has joined yet. Share the code to get started.")));
 
+  const suggested = (isOrganizer && !hunt.place && !LS.get("noplace."+code,false)) ? topPlace(S.photos) : null;
+  if (suggested) sections.splice(1,0,h("div",{class:"banner",style:"background:#EEF4FF;border-color:#C9DAF8"}, h("span",{style:"font-size:22px"},"📍"),
+    h("div",{style:"flex:1"},h("b",null,`Photos were taken around ${suggested}`),h("p",{class:"small muted"},"Use it as this hunt's location?")),
+    h("div",{class:"row",style:"gap:6px"}, h("button",{class:"btn ghost sm",onclick:()=>{ LS.set("noplace."+code,true); renderView(); }},"No"),
+      h("button",{class:"btn sm",onclick:async()=>{ try{ await tryWrite(()=>S.db.doc("hunts/"+code).update({place:suggested})); toast("Location added"); }catch(e){ toast(errMsg(e),5000); } }},"Use"))));
   if (isOrganizer) sections.push(h("button",{class:"btn soft block",onclick:()=>openOrganizer()},"⚙︎  Organizer tools"));
 
   return h("div",{class:"wrap stack-lg"},
-    h("div",{class:"topbar"}, brand(), h("div",{class:"row"},
+    h("div",{class:"topbar tight"}, brand(), h("div",{class:"row"},
       h("span",{class:"pill codechip"}, code),
       h("button",{class:"btn sm",onclick:()=>openShare(false)},"Invite"), acctBtn())),
     sections);
@@ -795,6 +899,7 @@ function myPanel(me, hunt, closed){
   const grid = h("div",{class:"photo-grid"},
     ps.map(p=>h("div",{class:"ph"},
       h("img",{src:p.t,alt:"",loading:"lazy"}),
+      (p.place && me.best!==p.id) ? h("div",{class:"loc",title:p.place},"📍 "+p.place) : null,
       h("button",{class:"star"+(me.best===p.id?" on":""),title:"Make this my best photo","aria-label":"Mark as best",onclick:()=>setBest(me,p.id)},"★"),
       (!closed && !S.readOnly) ? h("button",{class:"del","aria-label":"Delete photo",onclick:async()=>{ if(await confirmDialog("Delete this photo?","It will be removed from the book.")) deletePhoto(p, me); }},"✕") : null,
       me.best===p.id ? h("div",{class:"bestlbl"},"Best") : null)),
@@ -955,20 +1060,21 @@ function openShare(fresh){
 }
 function openOrganizer(){
   const hunt=S.hunt, code=S.code;
-  const title=h("input",{value:hunt.title||"",maxlength:"60"}), occ=h("input",{value:hunt.occasion||"",maxlength:"60"}), date=h("input",{value:hunt.date||"",maxlength:"40"});
+  const place=h("input",{value:hunt.place||"",maxlength:"60",placeholder:"e.g. Gulf Shores, Alabama"}); const title=h("input",{value:hunt.title||"",maxlength:"60"}), occ=h("input",{value:hunt.occasion||"",maxlength:"60"}), date=h("input",{value:hunt.date||"",maxlength:"40"});
   const tag=h("input",{value:hunt.tagline||"",maxlength:"60",placeholder:"e.g. Color hunting with the Racks family"}), note=h("input",{value:hunt.note||"",maxlength:"140",placeholder:"e.g. Fun fact: …"});
   const open = h("input",{type:"checkbox",checked:hunt.status!=="closed"});
   const body = h("div",{class:"stack"});
   const m = openModal(body);
   body.append(h("h2",null,"Organizer tools"),
     h("label",{class:"field"},h("span",null,"Hunt name"),title),
-    h("label",{class:"field"},h("span",null,"Where / occasion"),occ),
+    h("label",{class:"field"},h("span",null,"Where"),place),
+    h("label",{class:"field"},h("span",null,"Occasion"),occ),
     h("label",{class:"field"},h("span",null,"Date"),date),
     h("label",{class:"field"},h("span",null,"Book tagline"),tag),
     h("label",{class:"field"},h("span",null,"Note for the book"),note),
     h("label",{class:"toggle"},h("div",null,h("b",{style:"display:block"},"Open for joining & uploads"),h("span",{class:"muted small"},"Turn off when the hunt is over.")),h("span",{class:"switch"},open,h("i"))),
     h("button",{class:"btn block",onclick:async()=>{
-      try{ await tryWrite(()=>S.db.doc("hunts/"+code).update({title:title.value.trim()||hunt.title, occasion:occ.value.trim(), date:date.value.trim(), tagline:tag.value.trim(), note:note.value.trim(), status:open.checked?"open":"closed"})); toast("Saved"); m.close(); }
+      try{ await tryWrite(()=>S.db.doc("hunts/"+code).update({title:title.value.trim()||hunt.title, place:place.value.trim(), occasion:occ.value.trim(), date:date.value.trim(), tagline:tag.value.trim(), note:note.value.trim(), status:open.checked?"open":"closed"})); toast("Saved"); m.close(); }
       catch(e){ toast(errMsg(e),5000); }
     }},"Save changes"),
     h("div",{class:"eyebrow",style:"margin-top:26px"},"Book photos"),
@@ -1019,17 +1125,25 @@ async function startUpload(me, files){
   if (room<=0){ toast("You've reached the photo limit"); return; }
   if (files.length>room){ toast(`Only ${room} more photo${room>1?"s":""} allowed — using the first ${room}.`,4000); files = files.slice(0,room); }
   let saved=0;
+  const metas = await Promise.all(files.map(f=>readPhotoMeta(f)));
   for (let i=0;i<files.length;i++){
     let out;
-    try{ out = await editImage(files[i],{title:`Photo ${i+1} of ${files.length}`, accent:me.color.hex, multi:files.length>1}); }
+    try{ out = await editImage(files[i],{title:`Photo ${i+1} of ${files.length}`, accent:me.color.hex, multi:files.length>1, remaining:files.length-i}); }
     catch(e){ toast("Couldn't open that photo (try a JPG or PNG)"); continue; }
     if (out==="cancel") break;
+    if (out==="all"){
+      for (let j=i;j<files.length;j++){ try{ const c=await fileToCanvas(files[j]); saved++; queueSave(me,{canvas:c,meta:metas[j]}); }catch(e){ toast("Couldn't open one of the photos"); } }
+      break;
+    }
     if (!out) continue;
+    out.meta = metas[i];
     saved++;
     queueSave(me, out);
   }
   if (!saved) return;
   await S.saveChain;
+  for (let k=0;k<30 && !S.photos.some(p=>p.hunter===me.id);k++) await sleep(100);
+  await sleep(300);
   pickBest(me, true);
 }
 function queueSave(me, out){
@@ -1040,6 +1154,9 @@ async function savePhoto(me, out){
   const code=S.code, pid=rid();
   const c = out.canvas;
   const doc = { hunter:me.id, w:c.width, h:c.height, t:toThumb(c,400,.62), createdAt:Date.now(), uid:S.uid };
+  const meta = out.meta || {};
+  if (meta.takenAt) doc.takenAt = meta.takenAt;
+  if (meta.lat!=null){ doc.lat=meta.lat; doc.lng=meta.lng; const pn=await placeName(meta.lat,meta.lng); if(pn) doc.place=pn; }
   if (S.assets){
     try{ const blob = await canvasBlob(c,"image/jpeg",.88); const r = await S.assets.upload(blob,{type:"image/jpeg"}); doc.a = r.id; }
     catch(e){ console.warn("asset upload failed, storing in db", e); }
@@ -1088,8 +1205,67 @@ function pickBest(me, afterUpload){
     afterUpload && fresh.best ? h("button",{class:"btn ghost block",onclick:()=>m.close()},"Keep my current pick") : null),{onClose:()=>S.hooks.delete(hook)});
 }
 
+/* ---------- photo location (EXIF) ---------- */
+async function readPhotoMeta(file){
+  try{
+    const buf=await file.slice(0,262144).arrayBuffer(); const v=new DataView(buf);
+    if (v.byteLength<4 || v.getUint16(0)!==0xFFD8) return null;
+    let off=2;
+    while (off < v.byteLength-10){
+      const marker=v.getUint16(off), len=v.getUint16(off+2);
+      if ((marker & 0xFF00)!==0xFF00) break;
+      if (marker===0xFFE1 && v.getUint32(off+4)===0x45786966) return parseExif(v, off+10);
+      off += 2+len;
+    }
+  }catch(e){}
+  return null;
+}
+function parseExif(v,t){
+  const out={};
+  try{
+    const le=v.getUint16(t)===0x4949, u16=o=>v.getUint16(o,le), u32=o=>v.getUint32(o,le);
+    const rat=o=>{ const d=u32(o+4); return d ? u32(o)/d : 0; };
+    const ifd=o=>{ const n=u16(o), tags={}; for(let i=0;i<n;i++){ const e=o+2+i*12; tags[u16(e)]={count:u32(e+4),val:e+8}; } return tags; };
+    const at=e=>t+u32(e.val);
+    const str=e=>{ const o=e.count>4?at(e):e.val; let s=""; for(let i=0;i<e.count-1;i++) s+=String.fromCharCode(v.getUint8(o+i)); return s; };
+    const ifd0=ifd(t+u32(t+4));
+    const dt = ifd0[0x8769] ? (()=>{ const ex=ifd(at(ifd0[0x8769])); return ex[0x9003]||ex[0x9004]; })() : ifd0[0x0132];
+    if (dt){ const m=str(dt).match(/(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d)/); if(m) out.takenAt=new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime(); }
+    if (ifd0[0x8825]){
+      const g=ifd(at(ifd0[0x8825]));
+      const coord=e=>{ const o=at(e); return rat(o)+rat(o+8)/60+rat(o+16)/3600; };
+      if (g[2] && g[4]){
+        let lat=coord(g[2]), lng=coord(g[4]);
+        if (g[1] && String.fromCharCode(v.getUint8(g[1].val))==="S") lat=-lat;
+        if (g[3] && String.fromCharCode(v.getUint8(g[3].val))==="W") lng=-lng;
+        if (isFinite(lat) && isFinite(lng) && Math.abs(lat)<=90 && Math.abs(lng)<=180 && !(lat===0 && lng===0)){ out.lat=+lat.toFixed(5); out.lng=+lng.toFixed(5); }
+      }
+    }
+  }catch(e){}
+  return out;
+}
+async function placeName(lat,lng){
+  const k=lat.toFixed(2)+","+lng.toFixed(2); const cache=LS.get("geo",{});
+  if (cache[k]) return cache[k];
+  try{
+    const ctl=new AbortController(); const tm=setTimeout(()=>ctl.abort(),4000);
+    const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`,{signal:ctl.signal}); clearTimeout(tm);
+    const j=await r.json();
+    const city=j.city||j.locality||"", region=j.principalSubdivision||"", country=j.countryCode==="US"?"":(j.countryName||"");
+    const name=[city, region||country].filter(Boolean).join(", ") || country || null;
+    if (name){ cache[k]=name; LS.set("geo",cache); }
+    return name;
+  }catch(e){ return null; }
+}
+function topPlace(ps){ const c={}; ps.forEach(p=>{ if(p.place) c[p.place]=(c[p.place]||0)+1; }); const e=Object.entries(c).sort((a,b)=>b[1]-a[1])[0]; return e?e[0]:null; }
+async function fileToCanvas(file,maxSide=2048){
+  const url=URL.createObjectURL(file);
+  try{ const img=await loadImg(url); const sc=Math.min(1,maxSide/Math.max(img.naturalWidth,img.naturalHeight)); const c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*sc); c.height=Math.round(img.naturalHeight*sc); c.getContext("2d").drawImage(img,0,0,c.width,c.height); return c; }
+  finally{ URL.revokeObjectURL(url); }
+}
+
 /* ---------- image editor (Cropper.js) ---------- */
-function editImage(file, {title="Edit photo", aspect=NaN, lock=false, maxSide=2048, multi=false}={}){
+function editImage(file, {title="Edit photo", aspect=NaN, lock=false, maxSide=2048, multi=false, remaining=1}={}){
   return new Promise((resolve, reject)=>{
     const url = URL.createObjectURL(file);
     const img = h("img",{alt:""});
@@ -1133,7 +1309,8 @@ function editImage(file, {title="Edit photo", aspect=NaN, lock=false, maxSide=20
       stage, lock ? null : ratioBox, tools, adjBox,
       h("div",{class:"row",style:"margin-top:14px"},
         multi ? h("button",{class:"btn ghost",onclick:()=>done(null)},"Skip") : null,
-        save));
+        save),
+      (multi && remaining>1) ? h("button",{class:"btn ghost block",style:"margin-top:10px",onclick:()=>done("all")},`Add ${remaining===2?"both":"all "+remaining} without editing`) : null);
     const m = openModal(content,{dark:true,onClose:v=>{ if(v!=="_"){ try{cropper&&cropper.destroy();}catch(e){} URL.revokeObjectURL(url); resolve("cancel"); } }});
     img.onload = ()=>{
       cropper = new Cropper(img,{viewMode:1,dragMode:"move",autoCropArea:1,aspectRatio:aspect,background:false,checkOrientation:false,toggleDragModeOnDblclick:false,responsive:true,restore:false});
@@ -1245,7 +1422,7 @@ function buildBook(){
   const tagline = hunt.tagline || "A Color Hunt";
   // ---- cover
   { const els=[];
-    if (hunt.occasion) els.push(eyebrow(hunt.occasion,500,98,{s:15,ls:.34,c:SOFT,w:860}));
+    const topLine = hunt.place || hunt.occasion; if (topLine) els.push(eyebrow(topLine,500,98,{s:15,ls:.34,c:SOFT,w:860}));
     const hero={x:110,y:135,w:780,h:480};
     if (coverP) els.push({t:"img",...hero,pid:coverP.id,r:10,ph:"#2a2626"});
     else { const cw=hero.w/Math.max(1,colors.length); colors.forEach((c,i)=>els.push({t:"fill",x:hero.x+i*cw,y:hero.y,w:cw+.5,h:hero.h,c})); }
@@ -1273,6 +1450,7 @@ function buildBook(){
     else els.push(T("No finds yet",500,500,{s:28,c:SOFT}));
     els.push(eyebrow("Hunted by",500,842,{s:14,ls:.36,c:SOFT}));
     els.push(T(x.name,500,898,{f:"serif",s:44,c:CREAM,w:860}));
+    const tp=topPlace(ps); if (tp) els.push(eyebrow(tp,500,948,{s:13,ls:.3,c:SOFT,w:860}));
     pages.push({kind:"chapter",label:`${x.color.name} — ${x.name}`,els,bg:DARK});
     const rest=ps.slice(1); let prev=null, idx=0;
     chunkSizes(rest.length).forEach(n=>{
@@ -1308,7 +1486,7 @@ function buildBook(){
     if (closeP) els.push({t:"img",x:110,y:130,w:780,h:540,pid:closeP.id,r:10,ph:"#2a2626"});
     const dw=34; colors.slice(0,16).forEach((c,i,a)=>els.push({t:"circle",cx:500-(a.length-1)*dw/2+i*dw,cy:735,r:11,c:onDark(c)}));
     els.push(T(hunt.tagline||title,500,815,{f:"serif",s:40,c:CREAM,w:860,maxLines:2}));
-    els.push(eyebrow([hunt.tagline?title:hunt.occasion,hunt.date].filter(Boolean).join("  –  "),500,885,{s:15,ls:.32,c:SOFT,w:860}));
+    els.push(eyebrow([hunt.tagline?title:(hunt.occasion||hunt.place),hunt.date].filter(Boolean).join("  –  "),500,885,{s:15,ls:.32,c:SOFT,w:860}));
     pages.push({kind:"closing",label:"Closing",els,bg:DARK});
   }
   return pages;
