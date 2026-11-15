@@ -27,6 +27,18 @@ window.__CH_WEB = true;
     reset: function (email) { return sb.auth.resetPasswordForEmail(email, { redirectTo: home() }).then(function (r) { if (r.error) throw authErr(r.error); }); },
     updatePassword: function (pw) { return sb.auth.updateUser({ password: pw }).then(function (r) { if (r.error) throw authErr(r.error); }); },
     updateName: function (name) { return sb.auth.updateUser({ data: { name: name } }).then(function (r) { if (r.error) throw authErr(r.error); currentUser = r.data.user; }); },
+    providers: function () {
+      return fetch(cfg.supabaseUrl + "/auth/v1/settings", { headers: { apikey: cfg.supabaseAnonKey } }).then(function (r) { return r.json(); }).then(function (j) {
+        var ext = (j && j.external) || {}, out = [];
+        if (ext.google) out.push("google"); if (ext.apple) out.push("apple");
+        (cfg.customProviders || []).forEach(function (p) { out.push(p); });
+        return out;
+      }).catch(function () { return (cfg.customProviders || []).slice(); });
+    },
+    oauth: function (provider) {
+      try { localStorage.setItem("ch.returnTo", location.hash || ""); } catch (e) {}
+      return sb.auth.signInWithOAuth({ provider: provider, options: { redirectTo: home() } }).then(function (r) { if (r.error) throw authErr(r.error); });
+    },
     onChange: function (cb) { sb.auth.onAuthStateChange(function (ev, session) { currentUser = session ? session.user : null; setTimeout(function () { cb(ev, currentUser); }, 0); }); }
   };
   var T = "docs", BUCKET = "photos";
