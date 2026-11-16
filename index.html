@@ -179,6 +179,11 @@ body.hasnav #toasts{bottom:calc(86px + env(safe-area-inset-bottom))}
 .foundrow.on{border-color:var(--ink)}
 .foundrow .fsw{width:34px;height:34px;border-radius:10px;flex:none;display:block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
 .fbar{height:5px;border-radius:99px;background:#EEE8DD;margin-top:5px;overflow:hidden}.fbar i{display:block;height:100%;border-radius:99px}
+.covgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.covpick{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.covimg{width:100%;aspect-ratio:4/3;border-radius:12px;background:#E9E3D8 center/cover no-repeat;display:flex;align-items:center;justify-content:center}
+.upg{display:flex;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.upgic{width:44px;height:44px;border-radius:12px;background:#F1EBE1;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
 /* modals */
 #modals .ov{position:fixed;inset:0;background:rgba(20,17,13,.55);display:flex;align-items:flex-end;justify-content:center;z-index:50;animation:fade .2s}
 .sheet{background:var(--card);width:100%;max-width:560px;max-height:94vh;overflow:auto;border-radius:24px 24px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:up .28s cubic-bezier(.2,.9,.3,1);position:relative}
@@ -763,7 +768,8 @@ async function renderAutoPreview(st, container){
     let best=null; its.forEach(({it,i},j)=>{ const pid="pv-"+(it.pvid||(it.pvid=rid(8))); photos.push({id:pid,hunter:hid,t:it.t,w:it.w,h:it.h,createdAt:j,place:null}); if(st.best[k]===i) best=pid; });
     hunters.push({id:hid,name:st.name||"Me",color:{name:c.name,hex:c.hex},joinedAt:k,best}); });
   const gen=(renderAutoPreview.gen=(renderAutoPreview.gen||0)+1);
-  S.hunt={title:st.title||"My Color Hunt",place:st.place,date:st.date,palette:st.colors.filter((_,k)=>hunters.some(h=>h.id==="pv-h"+k)),auto:true,author:st.name}; S.hunters=hunters; S.photos=photos; S.photoMap=Object.fromEntries(photos.map(p=>[p.id,p]));
+  const pvId=i=>{ const it=st.items[i]; return it&&it.pvid ? "pv-"+it.pvid : null; };
+  S.hunt={coverPhoto:pvId(st.coverIdx), closingPhoto:pvId(st.backIdx), title:st.title||"My Color Hunt",place:st.place,date:st.date,palette:st.colors.filter((_,k)=>hunters.some(h=>h.id==="pv-h"+k)),auto:true,author:st.name}; S.hunters=hunters; S.photos=photos; S.photoMap=Object.fromEntries(photos.map(p=>[p.id,p]));
   let pages; try{ pages=buildBook(); } finally { Object.assign(S, saved); }
   const size=Math.min(1100, Math.round(Math.min(window.innerWidth-36,760)*Math.min(2,window.devicePixelRatio||1)));
   const shells=pages.map((p,i)=>{ const img=h("img",{alt:p.label,style:"display:none"}), ld=h("div",{class:"ld"},h("span",{class:"spin dk"})); const f=h("figure",{class:"bpage"},h("div",{class:"pg"},img,ld),h("figcaption",null,h("span",null,`${i+1} · ${p.label}`))); f._img=img; f._ld=ld; return f; });
@@ -858,6 +864,10 @@ function viewAuto(){
       } else body=h("div",{class:"stack-lg"},
         viewTabs,
         h("div",{class:"notice small"},`${st.items.length} photos in ${st.colors.length} colors · ${Math.min(...counts)}–${Math.max(...counts)} per color. Tap a photo's color tag to change it.`),
+        h("div",{class:"card stack"}, h("div",{class:"eyebrow"},"Cover & back cover"),
+          h("div",{class:"covgrid"}, [["cover","Cover photo"],["back","Back cover photo"]].map(([key,label])=>{ const it=st.items[st[key+"Idx"]];
+            return h("div",{class:"covpick"}, h("div",{class:"covimg",style:{backgroundImage:it?`url("${it.t}")`:"none"}}, it?null:h("span",{class:"muted small"},"Automatic")), h("b",null,label),
+              h("button",{class:"btn soft sm",onclick:()=>pickAutoCover(key,label)},"Change")); }))),
         st.colors.map((c,k)=>{ const its=st.items.map((it,i)=>({it,i})).filter(x=>x.it.color===k);
           return h("div",{class:"card stack"},
             h("div",{class:"row"}, h("i",{style:{width:"26px",height:"26px",borderRadius:"8px",background:c.hex,display:"block",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.12)"}}), h("h3",null,c.name), h("span",{class:"spacer"}), h("span",{class:"muted small"},`${its.length}`)),
@@ -873,6 +883,14 @@ function viewAuto(){
       h("div",{class:"topbar"}, brand(), h("button",{class:"btn ghost sm",onclick:()=>{ S.auto=null; go(""); }},"Cancel")),
       h("div",null, h("div",{class:"eyebrow"},`Auto-Hunt · Step ${st.step} of 3`), h("h2",{style:"margin:6px 0 12px"},STEPS[st.step-1]), h("div",{class:"stepbar"}, STEPS.map((_,i)=>h("i",{class:i<st.step?"on":""})))),
       body, nav);
+  };
+  const pickAutoCover=(key,label)=>{
+    let sel=st[key+"Idx"]; const body=h("div",{class:"stack"});
+    const d=()=>body.replaceChildren(h("h2",null,label),
+      h("button",{class:"chip"+(sel==null?" on":""),onclick:()=>{sel=null;d();}},"Automatic"),
+      h("div",{class:"photo-grid auto-grid"}, st.items.map((it,i)=>h("div",{class:"ph pick"+(sel===i?" on":""),onclick:()=>{sel=i;d();}},h("img",{src:it.t,alt:""})))),
+      h("button",{class:"btn block lg",onclick:()=>{ st[key+"Idx"]=sel; m.close(); draw(); }},"Use this"));
+    const m=openModal(body); d();
   };
   const movePhoto=(i)=>{
     const it=st.items[i]; const cur=st.colors[it.color]||{};
@@ -892,7 +910,7 @@ function viewAuto(){
       h("div",{class:"eyebrow"},"All your colors"),
       h("div",{class:"chips",style:"flex-wrap:wrap"}, st.colors.map((c,k)=>h("button",{class:"chip"+(it.color===k?" on":""),onclick:()=>setColor(k)}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:c.hex,display:"block",boxShadow:"0 0 0 2px #fff"}}), c.name))),
       h("button",{class:"btn soft block",onclick:()=>{ st.bestManual[it.color]=i; autoBest(st); m.close(); draw(); }},"★ Make this the best "+(cur.name||"")),
-      h("button",{class:"btn ghost block",onclick:()=>{ st.items.splice(i,1); st.bestManual={}; autoBest(st); m.close(); draw(); }},"Remove from book")));
+      h("button",{class:"btn ghost block",onclick:()=>{ st.items.splice(i,1); ["coverIdx","backIdx"].forEach(k=>{ if(st[k]===i) st[k]=null; else if(st[k]>i) st[k]--; }); st.bestManual={}; autoBest(st); m.close(); draw(); }},"Remove from book")));
   };
   const makeBook=async()=>{
     if (!(await requireAuth("Save your book"))) return;
@@ -911,13 +929,16 @@ function viewAuto(){
         let bestPid=null;
         for (const {it,i} of g.its){
           pr.set(done/total, `Saving photo ${done+1} of ${total} — keep this screen open`);
-          const c=await fileToCanvas(it.file); const pid=rid();
+          const c=await fileToCanvas(it.file); const pid=rid(); it.savedPid=pid;
           await savePhoto(me,{canvas:c,meta:it.meta},{code,pid,createdAt:Date.now()+done});
           if (st.best[it.color]===i) bestPid=pid;
           done++;
         }
         if (bestPid) await tryWrite(()=>S.db.doc(`hunts/${code}/hunters/${hid}`).update({best:bestPid}));
       }
+      const covers={}; if(st.coverIdx!=null && st.items[st.coverIdx] && st.items[st.coverIdx].savedPid) covers.coverPhoto=st.items[st.coverIdx].savedPid;
+      if(st.backIdx!=null && st.items[st.backIdx] && st.items[st.backIdx].savedPid) covers.closingPhoto=st.items[st.backIdx].savedPid;
+      if (Object.keys(covers).length) await tryWrite(()=>S.db.doc("hunts/"+code).update(covers));
       pr.done(); S.auto=null; toast("Your book is ready!"); go("h"+code+"-book");
     }catch(e){ pr.done(); toast(errMsg(e),6000); }
   };
@@ -1128,7 +1149,7 @@ function viewHunt(){
   const isOrganizer = hunt.createdBy===S.uid || (S.user && S.user.isOwner && safe(()=>S.user.isOwner()));
   const closed = hunt.status==="closed";
   const H = sortedHunters();
-  const totalPhotos = S.photos.length;
+  const totalPhotos = S.photos.filter(p=>p.hunter!=="__book").length;
 
   const header = h("div",null,
     h("div",{class:"eyebrow"}, [hunt.place, hunt.occasion, hunt.date].filter(Boolean).join(" · ") || "Color hunt"),
@@ -1420,13 +1441,18 @@ function openOrganizer(){
       h("div",{style:"flex:1"},h("b",null,x.name),h("div",{class:"muted small"},x.color.name+" · "+S.photos.filter(p=>p.hunter===x.id).length+" photos")),
       h("button",{class:"btn ghost sm",onclick:async()=>{ if(await confirmDialog(`Remove ${x.name}?`,"Their photos will be deleted from the hunt and the book.","Remove")){ m.close(); removeHunter(x); } }},"Remove"))));
 }
-function choosePhoto(label, current, noneLabel, onPick){
+function choosePhoto(label, current, noneLabel, onPick, allowUpload){
   let sel=current;
+  const upIn=h("input",{type:"file",accept:"image/*",class:"sr",onchange:async()=>{ const f=upIn.files[0]; upIn.value=""; if(!f) return;
+    const out=await editImage(f,{title:label}).catch(()=>null); if(!out||out==="cancel") return;
+    const pr=progressOverlay("Saving photo…"); const pid=rid();
+    try{ out.meta=await readPhotoMeta(f); await savePhoto({id:"__book"},out,{pid}); pr.done(); m.close(); onPick(pid); }catch(e){ pr.done(); toast(errMsg(e),5000); } }});
   const groups=sortedHunters().map(x=>({x,ps:photosOf(x)})).filter(g=>g.ps.length);
   const body=h("div",{class:"stack"});
   const draw=()=>body.replaceChildren(
     h("h2",null,label),
-    h("button",{class:"chip"+(sel?"":" on"),onclick:()=>{sel=null;draw();}},noneLabel),
+    h("div",{class:"row wrap-row"}, h("button",{class:"chip"+(sel?"":" on"),onclick:()=>{sel=null;draw();}},noneLabel),
+      allowUpload ? h("button",{class:"chip",onclick:()=>upIn.click()},"⤒ Upload a different photo") : null, upIn),
     groups.length?null:h("p",{class:"muted"},"No photos yet."),
     groups.map(g=>h("div",{class:"stack"},h("div",{class:"eyebrow"},g.x.name+" · "+g.x.color.name),
       h("div",{class:"photo-grid"},g.ps.map(p=>h("div",{class:"ph pick"+(sel===p.id?" on":""),onclick:()=>{sel=p.id;draw();}},h("img",{src:p.t,alt:""})))))),
@@ -1812,7 +1838,7 @@ const DARK="#141212", CREAM_BG="#F1EBE1", CREAM="#F3ECE2", SOFT="#A8A097", GOLD=
 function containRect(p, box){ const a=aspectOf(p), ba=box.w/box.h; let w,hh; if(a>ba){w=box.w;hh=w/a;}else{hh=box.h;w=hh*a;} return {x:box.x+(box.w-w)/2,y:box.y+(box.h-hh)/2,w,h:hh}; }
 function framedPhoto(els, r, color, pid, t, rad, ph){ els.push({t:"fill",x:r.x-t,y:r.y-t,w:r.w+2*t,h:r.h+2*t,c:color,r:rad+t*.7,edge:lum(color)>.8}); els.push({t:"img",...r,pid,r:rad,ph}); }
 function onDark(hex){ return lum(hex)<.035 ? mix(hex,"#ffffff",.45) : hex; }
-function onLight(hex){ return lum(hex)>.62 ? mix(hex,INK,.4) : hex; }
+function onLight(hex){ const L=lum(hex); return L>.62 ? mix(hex,INK,.4) : L>.42 ? mix(hex,INK,.28) : hex; }
 function rainbowBar(els, x, y, w, hh, colors){ if(!colors.length) return; const sw=w/colors.length; els.push({t:"bar",x,y,w,h:hh,r:hh/2,colors}); }
 function bestCols(n, area, aspect, labelFrac, maxCols){
   let best={cols:1,w:0};
@@ -1897,7 +1923,9 @@ function buildBook(){
         els2.push({t:"img",x:500-rw/2+c*(cell+g),y:top+r*(cell+g),w:cell,h:cell,pid:p.id,r:6,ph:mix(col,"#fff",.6)}); });
       pages.push({kind:"allfinds",label:`All ${x.color.name} finds`,els:els2,bg:CREAM_BG,hid:x.id});
     }
+    if (hunt.premium && hunt.premium.maps){ const mp=mapPagesFor(x, ps); if (mp) pages.push(mp); }
   });
+  if (hunt.premium && hunt.premium.maps){ const ov=overviewMapPage(H); if (ov) pages.push(ov); }
   // ---- best finds
   { const bests=H.map(x=>({x,p:S.photoMap[x.best]||photosOf(x)[0]})).filter(b=>b.p);
     const els=[];
@@ -1967,11 +1995,15 @@ async function drawPage(page, size, canvas){
   const ctx=canvas.getContext("2d"); const k=size/1000;
   ctx.setTransform(k,0,0,k,0,0); ctx.imageSmoothingQuality="high";
   ctx.fillStyle=page.bg||PAPER; ctx.fillRect(0,0,1000,1000);
-  const imgs = await Promise.all(page.els.map(e=>e.t==="img" ? imageFor(e, Math.max(e.w,e.h)*k) : null));
+  const imgs = await Promise.all(page.els.map(e=>{
+    if (e.t==="img") return imageFor(e, Math.max(e.w,e.h)*k);
+    if (e.t==="map") return Promise.all(mapTiles(e).map(t=>cacheGet(t.url,()=>loadImg(t.url)).then(img=>({...t,img})).catch(()=>({...t,img:null}))));
+    return null; }));
   page.els.forEach((e,i)=>{
     ctx.save();
     if (e.t==="fill"){ ctx.fillStyle=e.c; rr(ctx,e.x,e.y,e.w,e.h,e.r||0); ctx.fill(); if(e.edge){ ctx.strokeStyle="rgba(0,0,0,.12)"; ctx.lineWidth=1.2; ctx.stroke(); } }
     else if (e.t==="bar"){ ctx.beginPath(); rr(ctx,e.x,e.y,e.w,e.h,e.r); ctx.clip(); const sw=e.w/e.colors.length; e.colors.forEach((c,j)=>{ ctx.fillStyle=c; ctx.fillRect(e.x+j*sw,e.y,sw+.6,e.h); }); }
+    else if (e.t==="map"){ drawMap(ctx,e,imgs[i]); }
     else if (e.t==="circle"){ ctx.fillStyle=e.c; ctx.beginPath(); ctx.arc(e.cx,e.cy,e.r,0,Math.PI*2); ctx.fill(); if(e.edge){ ctx.strokeStyle="rgba(0,0,0,.18)"; ctx.lineWidth=1.2; ctx.stroke(); } }
     else if (e.t==="img"){
       ctx.beginPath(); if(e.round){ ctx.arc(e.x+e.w/2,e.y+e.h/2,e.w/2,0,Math.PI*2); } else rr(ctx,e.x,e.y,e.w,e.h,e.r||0); ctx.clip();
@@ -1991,6 +2023,145 @@ async function drawPage(page, size, canvas){
     ctx.restore();
   });
   return canvas;
+}
+
+/* ==================== PREMIUM & PRINT ==================== */
+const PRICES = { maps:2.99, softcover:29.99, hardcoverUp:15.00, premiumColorUp:9.99, includedPages:20, extraPage:0.75 };
+const PAYMENTS_LIVE = !!(window.CH_CONFIG && window.CH_CONFIG.paymentsLive);
+const money = v => "$"+v.toFixed(2);
+function canManage(){ const hu=S.hunt; return !!hu && (hu.createdBy===S.uid || safe(()=>S.user && S.user.isOwner && S.user.isOwner())); }
+async function setPremium(key, on){
+  const prem={...(S.hunt.premium||{}), [key]:on};
+  try{ await tryWrite(()=>S.db.doc("hunts/"+S.code).update({premium:prem})); toast(on?"Added to your book":"Removed"); }catch(e){ toast(errMsg(e),5000); }
+}
+function addUpgrade(key, title){
+  if (PAYMENTS_LIVE){ toast("Checkout is coming soon"); return; }
+  const m=openModal(h("div",{class:"stack"},
+    h("div",{class:"eyebrow"},"Upgrade"), h("h2",null,title), h("p",{class:"muted"},`${money(PRICES[key])} once you start charging. Payments aren't switched on yet, so it's free while you test.`),
+    h("button",{class:"btn block lg",onclick:()=>{ m.close(); setPremium(key,true); }},"Add for free (testing)"),
+    h("button",{class:"btn ghost block",onclick:()=>m.close()},"Not now")));
+}
+function openPrintOrder(){
+  const pages=S.pages.length; const extra=Math.max(0,pages-PRICES.includedPages);
+  const st={cover:"soft", paper:"standard", qty:1};
+  const body=h("div",{class:"stack"}); const m=openModal(body);
+  const opt=(group,val,title,sub,price)=>h("button",{class:"mode-card"+(st[group]===val?" on":""),onclick:()=>{st[group]=val;draw();}},h("div",{style:"flex:1"},h("b",null,title),h("span",null,sub)),h("b",{style:"white-space:nowrap"},price));
+  const draw=()=>{
+    const each = PRICES.softcover + (st.cover==="hard"?PRICES.hardcoverUp:0) + (st.paper==="premium"?PRICES.premiumColorUp:0) + extra*PRICES.extraPage;
+    const total = each*st.qty;
+    body.replaceChildren(
+      h("div",{class:"eyebrow"},"Printed book"), h("h2",null,"Order a printed copy"),
+      h("p",{class:"muted small"},`8 × 8 in · ${pages} pages${S.hunt.premium&&S.hunt.premium.maps?" · includes map pages":""}`),
+      h("div",{class:"eyebrow",style:"margin-top:6px"},"Cover"),
+      h("div",{class:"mode-cards"}, opt("cover","soft","Softcover","Flexible glossy cover",money(PRICES.softcover)), opt("cover","hard","Hardcover","Sturdy, lasts for years","+"+money(PRICES.hardcoverUp))),
+      h("div",{class:"eyebrow",style:"margin-top:6px"},"Paper & color"),
+      h("div",{class:"mode-cards"}, opt("paper","standard","Standard color","Bright, everyday photo paper","Included"), opt("paper","premium","Premium color","Thicker lustre paper, richer colors","+"+money(PRICES.premiumColorUp))),
+      extra ? h("p",{class:"hint"},`${PRICES.includedPages} pages included; ${extra} extra × ${money(PRICES.extraPage)}.`) : null,
+      h("div",{class:"row",style:"justify-content:space-between;margin-top:6px"}, h("b",null,"Copies"),
+        h("div",{class:"row"}, h("button",{class:"iconbtn",onclick:()=>{ st.qty=Math.max(1,st.qty-1); draw(); }},"−"), h("b",{style:"min-width:28px;text-align:center"},String(st.qty)), h("button",{class:"iconbtn",onclick:()=>{ st.qty=Math.min(20,st.qty+1); draw(); }},"+"))),
+      h("div",{class:"row",style:"justify-content:space-between;font-size:20px;border-top:1px solid var(--line);padding-top:12px"}, h("b",null,"Total"), h("b",null,money(total))),
+      h("p",{class:"hint"},"Plus shipping and tax at checkout."),
+      h("button",{class:"btn block lg",onclick:async()=>{
+        if (!(await requireAuth("Order a printed book"))) return;
+        try{
+          await tryWrite(()=>S.db.collection(`hunts/${S.code}/orders`).doc(rid()).set({cover:st.cover,paper:st.paper,qty:st.qty,pages,maps:!!(S.hunt.premium&&S.hunt.premium.maps),each:+each.toFixed(2),total:+total.toFixed(2),uid:S.uid,email:(S.account&&S.account.email)||null,createdAt:Date.now(),status:"requested"}));
+          body.replaceChildren(h("div",{class:"reveal"},h("div",{style:"font-size:54px"},"📚"),h("h2",null,"Request saved"),h("p",{class:"muted",style:"margin:10px 0 20px"},"Checkout and shipping aren't switched on yet. Your book choices are saved, so you'll be able to finish your order as soon as printing goes live."),h("button",{class:"btn block",onclick:()=>m.close()},"Done")));
+        }catch(e){ toast(errMsg(e),5000); }
+      }}, PAYMENTS_LIVE ? "Continue to checkout" : "Request this book"));
+  };
+  draw();
+}
+function bookCustomizeCards(){
+  const hunt=S.hunt; const prem=hunt.premium||{};
+  const thumb=(pid,label,key,hint)=>{ const p=S.photoMap[pid];
+    return h("div",{class:"covpick"},
+      h("div",{class:"covimg",style:{backgroundImage:p?`url("${p.t}")`:"none"}}, p?null:h("span",{class:"muted small"},"Auto")),
+      h("b",null,label), h("span",{class:"muted small"},p?"Your pick":hint),
+      h("button",{class:"btn soft sm",onclick:()=>choosePhoto(label, pid||null, "Automatic", async sel=>{ try{ await tryWrite(()=>S.db.doc("hunts/"+S.code).update({[key]:sel})); toast("Saved"); }catch(e){ toast(errMsg(e),5000); } }, true)},"Change")); };
+  const manage=canManage();
+  return [
+    manage ? h("div",{class:"card stack",style:"margin-top:18px"},
+      h("div",{class:"eyebrow"},"Cover & back cover"),
+      h("div",{class:"covgrid"},
+        thumb(hunt.coverPhoto,"Cover photo","coverPhoto","Best photo"),
+        thumb(hunt.closingPhoto,"Back cover photo","closingPhoto","Another best"))) : null,
+    h("div",{class:"card stack",style:"margin-top:18px"},
+      h("div",{class:"row"},h("div",{class:"eyebrow"},"Book upgrades"),h("span",{class:"spacer"}), PAYMENTS_LIVE?null:h("span",{class:"pill",style:"font-size:11px;padding:3px 9px"},"Free while testing")),
+      h("div",{class:"upg"},
+        h("div",{class:"upgic"},"🗺"),
+        h("div",{style:"flex:1"},h("b",null,"Map pages"),h("p",{class:"muted small"},"One map per color showing where each photo was taken, plus an overview map. Uses the photos' location info.")),
+        prem.maps ? (manage ? h("button",{class:"btn ghost sm",onclick:()=>setPremium("maps",false)},"✓ Added") : h("span",{class:"pill"},"✓ Added"))
+                  : (manage ? h("button",{class:"btn sm",onclick:()=>addUpgrade("maps","Map pages")},"+"+money(PRICES.maps)) : h("span",{class:"muted small"},money(PRICES.maps)))),
+      h("div",{class:"upg"},
+        h("div",{class:"upgic"},"📚"),
+        h("div",{style:"flex:1"},h("b",null,"Printed book"),h("p",{class:"muted small"},`Softcover from ${money(PRICES.softcover)} · Hardcover +${money(PRICES.hardcoverUp)} · Premium color +${money(PRICES.premiumColorUp)}`)),
+        h("button",{class:"btn sm",onclick:openPrintOrder},"Order")))
+  ];
+}
+
+/* ==================== MAP PAGES ==================== */
+const TILE_URL = (z,x,y)=>`https://${"abcd"[(x+y)%4]}.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}@2x.png`;
+const lng2x=(lng,z)=>(lng+180)/360*256*Math.pow(2,z);
+const lat2y=(lat,z)=>{ const r=Math.max(-85,Math.min(85,lat))*Math.PI/180; return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*256*Math.pow(2,z); };
+function mapView(pts,w,h){
+  let z=16;
+  for (;z>2;z--){ const xs=pts.map(p=>lng2x(p.lng,z)), ys=pts.map(p=>lat2y(p.lat,z)); if (Math.max(...xs)-Math.min(...xs)<=w*0.72 && Math.max(...ys)-Math.min(...ys)<=h*0.72) break; }
+  if (pts.length===1 || z>15) z=Math.min(z,14);
+  const xs=pts.map(p=>lng2x(p.lng,z)), ys=pts.map(p=>lat2y(p.lat,z));
+  return {z, cx:(Math.min(...xs)+Math.max(...xs))/2, cy:(Math.min(...ys)+Math.max(...ys))/2};
+}
+function mapEl(box, pins){
+  const v=mapView(pins,box.w,box.h);
+  return {t:"map",...box,r:14,z:v.z,cx:v.cx,cy:v.cy,pins:pins.map(p=>({px:lng2x(p.lng,v.z),py:lat2y(p.lat,v.z),c:p.c,label:p.label}))};
+}
+function mapTiles(e){
+  const x0=e.cx-e.w/2, y0=e.cy-e.h/2, n=Math.pow(2,e.z), out=[];
+  for (let tx=Math.floor(x0/256); tx<=Math.floor((x0+e.w)/256); tx++) for (let ty=Math.floor(y0/256); ty<=Math.floor((y0+e.h)/256); ty++){
+    if (ty<0||ty>=n) continue; out.push({tx,ty,url:TILE_URL(e.z,((tx%n)+n)%n,ty)});
+  }
+  return out;
+}
+function drawMap(ctx,e,tiles){
+  ctx.beginPath(); rr(ctx,e.x,e.y,e.w,e.h,e.r||0); ctx.clip();
+  ctx.fillStyle="#EAE6DC"; ctx.fillRect(e.x,e.y,e.w,e.h);
+  const x0=e.cx-e.w/2, y0=e.cy-e.h/2;
+  let any=false;
+  (tiles||[]).forEach(t=>{ if(t.img){ any=true; ctx.drawImage(t.img, e.x+t.tx*256-x0, e.y+t.ty*256-y0, 256.5, 256.5); } });
+  if (!any){ ctx.strokeStyle="rgba(0,0,0,.06)"; ctx.lineWidth=1; for(let gx=e.x;gx<e.x+e.w;gx+=40){ctx.beginPath();ctx.moveTo(gx,e.y);ctx.lineTo(gx,e.y+e.h);ctx.stroke();} for(let gy=e.y;gy<e.y+e.h;gy+=40){ctx.beginPath();ctx.moveTo(e.x,gy);ctx.lineTo(e.x+e.w,gy);ctx.stroke();} }
+  const labeled=e.pins.some(p=>p.label);
+  e.pins.forEach(p=>{ const sx=e.x+p.px-x0, sy=e.y+p.py-y0, r=labeled?17:12;
+    ctx.save(); ctx.shadowColor="rgba(0,0,0,.3)"; ctx.shadowBlur=6; ctx.shadowOffsetY=2;
+    ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(sx,sy,r+4,0,Math.PI*2); ctx.fill(); ctx.restore();
+    ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2); ctx.fill();
+    if (p.label){ ctx.fillStyle=onColor(p.c); ctx.font="700 16px Poppins, system-ui, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(p.label,sx,sy+1); }
+  });
+  ctx.textBaseline="alphabetic";
+  if (any){ ctx.font="400 11px Poppins, system-ui, sans-serif"; ctx.textAlign="right"; const txt="© OpenStreetMap contributors © CARTO"; const w=ctx.measureText(txt).width; ctx.fillStyle="rgba(255,255,255,.8)"; ctx.fillRect(e.x+e.w-w-12,e.y+e.h-20,w+12,20); ctx.fillStyle="#555"; ctx.fillText(txt,e.x+e.w-6,e.y+e.h-6); }
+}
+function mapPagesFor(x, ps){
+  const located=ps.filter(p=>p.lat!=null&&p.lng!=null); if(!located.length) return null;
+  const col=x.color.hex, els=[];
+  els.push(eyebrow(`Where the ${x.color.name} was found`,500,80,{s:15,ls:.3,c:MUTED,w:860}));
+  els.push(T(`${x.color.name} on the map`,500,140,{f:"serif",s:52,w:860,c:onLight(col)}));
+  els.push(mapEl({x:70,y:195,w:860,h:540}, located.map((p,i)=>({lat:p.lat,lng:p.lng,c:col,label:String(i+1)}))));
+  const shown=located.slice(0,12), cols=Math.min(6,shown.length), rows=Math.ceil(shown.length/6), g=10;
+  const cell=Math.min(90,(860-(cols-1)*g)/cols); const rowW=cols*cell+(cols-1)*g; const top=760;
+  shown.forEach((p,i)=>{ const r=Math.floor(i/6), c=i%6, inRow=Math.min(6,shown.length-r*6); const rw=inRow*cell+(inRow-1)*g;
+    const xx=500-rw/2+c*(cell+g), yy=top+r*(cell+g);
+    els.push({t:"img",x:xx,y:yy,w:cell,h:cell,pid:p.id,r:8,ph:mix(col,"#fff",.6)});
+    els.push({t:"circle",cx:xx+14,cy:yy+14,r:12,c:col}); els.push(T(String(i+1),xx+14,yy+14,{s:13,wt:700,c:onColor(col)}));
+  });
+  const tp=topPlace(located); const note=[tp, located.length<ps.length?`${located.length} of ${ps.length} photos had location info`:null].filter(Boolean).join("  ·  ");
+  if (note) els.push(T(note,500,top+rows*(cell+g)+28,{s:15,c:MUTED,w:860}));
+  return {kind:"map",label:`${x.color.name} map`,els,bg:CREAM_BG,hid:x.id};
+}
+function overviewMapPage(H){
+  const pins=[]; H.forEach(x=>photosOf(x).forEach(p=>{ if(p.lat!=null) pins.push({lat:p.lat,lng:p.lng,c:x.color.hex}); }));
+  if (pins.length<2) return null;
+  const els=[eyebrow("Every find, everywhere",500,80,{s:15,ls:.3,c:MUTED}), T("Where we hunted",500,140,{f:"serif",s:56,w:860}), mapEl({x:70,y:195,w:860,h:620},pins)];
+  const used=H.filter(x=>photosOf(x).some(p=>p.lat!=null)); const dw=Math.min(150,860/Math.max(1,used.length));
+  used.forEach((x,i)=>{ const cx=500-(used.length-1)*dw/2+i*dw; els.push({t:"circle",cx:cx-dw/2+18,cy:870,r:9,c:x.color.hex,edge:lum(x.color.hex)>.8}); els.push(T(x.color.name,cx-dw/2+34,870,{al:"left",s:15,wt:600,w:dw-40})); });
+  return {kind:"map",label:"Where we hunted",els,bg:CREAM_BG};
 }
 
 /* ==================== BOOK VIEW ==================== */
@@ -2015,6 +2186,7 @@ function viewBook(){
         ex("📖","Digital book PDF","Smaller file for texting & email",()=>exportPDF("digital")),
         ex("📱","Social posts","1080 × 1080 JPGs in a .zip — carousel-ready",()=>exportSocial())),
       h("p",{class:"hint"},"Instagram carousels hold up to 20 slides. Tap ", h("b",null,"Save")," under any page to save just that one.")),
+    h("div",{id:"bookcustom"}),
     h("div",{id:"bookfilter",style:"margin-top:20px"}),
     pagesEl);
   setTimeout(updateBook,0);
@@ -2022,12 +2194,13 @@ function viewBook(){
 }
 let viewerGen=0, viewerUrls=[];
 function bookSignature(){
-  const hu=S.hunt; return JSON.stringify([hu.title,hu.occasion,hu.date,hu.palette, sortedHunters().map(x=>[x.id,x.name,x.color,x.best,(x.selfie||"").length]), S.photos.map(p=>p.id+p.hunter).sort()]);
+  const hu=S.hunt; return JSON.stringify([hu.title,hu.place,hu.occasion,hu.date,hu.tagline,hu.note,hu.coverPhoto,hu.closingPhoto,hu.spotlightPhoto,hu.premium,hu.palette, sortedHunters().map(x=>[x.id,x.name,x.color,x.best,(x.selfie||"").length]), S.photos.map(p=>p.id+p.hunter).sort()]);
 }
 function updateBook(){
   if (!S.bookEl) return;
   const sig=bookSignature(); if (sig===S.bookSig) return; S.bookSig=sig;
   S.pages = buildBook();
+  const bc=$("#bookcustom"); if (bc) bc.replaceChildren(...bookCustomizeCards());
   const meta=$("#bookmeta"); if(meta) meta.textContent = `${S.pages.length} pages · ${S.hunters.length} hunters · ${S.photos.length} photos · updates live as photos arrive`;
   const gen=++viewerGen; viewerUrls.forEach(u=>URL.revokeObjectURL(u)); viewerUrls=[];
   const queue=[]; let busy=false;
