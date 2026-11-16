@@ -673,7 +673,7 @@ async function analyzeFile(file){
   try{ if (window.createImageBitmap){ bmp = await createImageBitmap(file); w=bmp.width; hh=bmp.height; } }catch(e){ bmp=null; }
   if (!bmp){ url=URL.createObjectURL(file); bmp=await loadImg(url); w=bmp.naturalWidth; hh=bmp.naturalHeight; }
   try{
-    const N=48, c=document.createElement("canvas"); c.width=N; c.height=N;
+    const N=80, c=document.createElement("canvas"); c.width=N; c.height=N;
     const x=c.getContext("2d",{willReadFrequently:true}); x.drawImage(bmp,0,0,N,N);
     const d=x.getImageData(0,0,N,N).data; const px=new Float32Array(N*N*4);
     for (let i=0,j=0;i<d.length;i+=4,j+=4){ const p=i/4, cx=(p%N)/(N-1)-.5, cy=Math.floor(p/N)/(N-1)-.5; const lab=rgb2lab(d[i],d[i+1],d[i+2]);
@@ -683,23 +683,34 @@ async function analyzeFile(file){
     return { px, w, h:hh, t:t.toDataURL("image/jpeg",.62) };
   } finally { if (bmp && bmp.close) bmp.close(); if (url) URL.revokeObjectURL(url); }
 }
-function votes(px, colors){
-  const v=new Float32Array(colors.length); let tot=0;
+/* mode "assign": what the photo is "about" — bright, saturated subjects count more than big dull areas.
+   mode "presence": every color that shows up anywhere, background included (share of pixels). */
+function votes(px, colors, mode="assign"){
+  const n=colors.length, area=new Float32Array(n), vivid=new Float32Array(n); let tot=0;
   const chroma=[], byKind={white:[],black:[],gray:[]};
   colors.forEach((c,k)=>{ if(c.kind==="chroma") chroma.push(k); else byKind[c.kind].push(k); });
+  const presence = mode==="presence";
   for (let j=0;j<px.length;j+=4){
-    const L=px[j],A=px[j+1],B=px[j+2],w=px[j+3]; tot+=w;
+    const L=px[j],A=px[j+1],B=px[j+2], cw=presence?1:px[j+3];
+    tot+=cw;
     const C=Math.hypot(A,B);
-    if (C>=15){
+    if (C>=13 && L>8){
       let bi=-1, bd=1e9;
-      for (const k of chroma){ const c=colors[k].lab; const dd=0.35*(L-c[0])**2+(A-c[1])**2+(B-c[2])**2; if(dd<bd){bd=dd;bi=k;} }
-      if (bi>=0 && bd<70*70) v[bi]+= w*Math.min(1,C/40)*(1-Math.sqrt(bd)/90);
+      for (const k of chroma){ const c=colors[k].lab; const dd=0.3*(L-c[0])**2+(A-c[1])**2+(B-c[2])**2; if(dd<bd){bd=dd;bi=k;} }
+      if (bi>=0 && bd<85*85){ const fit=1-Math.sqrt(bd)/120; area[bi]+=cw*fit; vivid[bi]+=cw*fit*Math.min(3,Math.pow(C/42,1.7)); }
     } else {
-      const kind = L>80 ? "white" : L<24 ? "black" : "gray";
-      const ks=byKind[kind]; if (ks.length) v[ks[0]] += w*(kind==="gray"?0.18:0.42);
+      const kind = L>74 ? "white" : L<22 ? "black" : "gray";
+      const ks=byKind[kind]; if (ks.length){ area[ks[0]]+=cw; vivid[ks[0]]+=cw*(kind==="gray"?0.12:0.45); }
     }
   }
-  for (let k=0;k<v.length;k++) v[k]/=(tot||1);
+  const v=new Float32Array(n);
+  for (let k=0;k<n;k++){
+    const a=area[k]/(tot||1);
+    if (presence){ v[k]=a; continue; }
+    if (a<=0) continue;
+    const meanVivid=vivid[k]/area[k];
+    v[k]=Math.sqrt(a)*Math.pow(meanVivid,1.3)*Math.min(1,a/0.008);
+  }
   return v;
 }
 function autoPool(st){
@@ -713,7 +724,7 @@ function autoPool(st){
 }
 function suggestColors(items, n, pool){
   const cands=pool||autoCandidates(); const score=new Float32Array(cands.length);
-  items.forEach(it=>{ const v=votes(it.px,cands); v.forEach((x,k)=>score[k]+=x*x); });
+  items.forEach(it=>{ const v=votes(it.px,cands); const m=Math.max(...v)||1; v.forEach((x,k)=>score[k]+=Math.pow(x/m,4)+0.02*x); });
   const order=cands.map((c,k)=>({c,s:score[k]})).sort((a,b)=>b.s-a.s);
   const out=[];
   for (const o of order){ if (out.some(c=>colorDist(c.hex,o.c.hex)<(pool&&pool.length<=12?20:70))) continue; out.push(o.c); if(out.length>=n) break; }
@@ -737,10 +748,12 @@ function sortPhotos(items, colors){
   items.forEach((it,i)=>{ it.color=assign[i]; it.conf=conf[i][assign[i]]; });
 }
 function photoColors(it, chosen){
-  const all=autoCandidates(true); const v=votes(it.px,all);
-  const ranked=all.map((c,k)=>({c,v:v[k]})).filter(x=>x.v>0.015 && x.c.kind!=="gray").sort((a,b)=>b.v-a.v);
-  const top=ranked.length?ranked[0].v:1;
-  return ranked.slice(0,8).map(x=>({name:x.c.name,hex:x.c.hex,strength:x.v/top,inSet:chosen.findIndex(c=>c.name===x.c.name||colorDist(c.hex,x.c.hex)<30)}));
+  const cols=chosen.map(prepColor);
+  const pres=votes(it.px, cols, "presence"), subj=votes(it.px, cols, "assign");
+  const top=Math.max(...subj)||1;
+  return cols.map((c,k)=>({name:c.name,hex:c.hex,inSet:k,share:pres[k],strength:Math.max(subj[k]/top, Math.min(1,pres[k]*3))}))
+    .filter(x=>x.share>=0.004 || x.strength>=0.08)
+    .sort((a,b)=>b.strength-a.strength);
 }
 function autoBest(st){ const best={}; st.items.forEach((it,i)=>{ if(it.color<0) return; if(best[it.color]==null || it.conf>st.items[best[it.color]].conf) best[it.color]=i; }); st.best = Object.assign(best, st.bestManual||{}); }
 async function renderAutoPreview(st, container){
