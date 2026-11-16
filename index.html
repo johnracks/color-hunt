@@ -193,6 +193,21 @@ body.hasnav #toasts{bottom:calc(86px + env(safe-area-inset-bottom))}
 .scavrow.done span{color:var(--muted)}
 .scavn{width:32px;height:32px;border-radius:50%;background:#F1EBE1;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none;color:var(--ink)!important}
 .scavthumb{width:44px;height:44px;border-radius:10px;background:#ddd center/cover;flex:none;border:2px solid #2E9E5B}
+.menubtn{width:40px;height:40px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;flex:none}
+.menubtn span{display:block;width:20px;height:2.5px;border-radius:2px;background:var(--ink)}
+.menubtn:active{background:#EAE3D6}
+#drawer .drawer-ov{position:fixed;inset:0;background:rgba(20,17,13,.45);z-index:70;animation:fade .2s}
+#drawer .drawer{position:fixed;top:0;bottom:0;left:0;width:min(320px,86vw);background:var(--card);z-index:71;padding:18px 14px calc(18px + env(safe-area-inset-bottom));overflow:auto;box-shadow:10px 0 40px rgba(0,0,0,.18);animation:slidein .22s cubic-bezier(.2,.9,.3,1)}
+#drawer .out{animation:none;opacity:0;transition:opacity .18s}
+#drawer .drawer.out{transform:translateX(-100%);transition:transform .2s}
+@keyframes slidein{from{transform:translateX(-100%)}}
+.dlink{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:11px 10px;border-radius:14px;font-size:16px}
+.dlink:hover,.dlink.on{background:#F1EBE1}
+.dlink b{display:block;font-weight:600}
+.dic{width:36px;height:36px;border-radius:10px;background:#F6F2EA;display:flex;align-items:center;justify-content:center;font-size:18px;flex:none}
+.dsub{display:block;font-size:12px;color:var(--muted);font-weight:400}
+.dsec{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:16px 10px 6px}
+.dacct{display:flex;gap:10px;align-items:center;padding:10px;border-radius:14px;background:#F6F2EA;margin-bottom:8px}
 /* modals */
 #modals .ov{position:fixed;inset:0;background:rgba(20,17,13,.55);display:flex;align-items:flex-end;justify-content:center;z-index:50;animation:fade .2s}
 .sheet{background:var(--card);width:100%;max-width:560px;max-height:94vh;overflow:auto;border-radius:24px 24px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:up .28s cubic-bezier(.2,.9,.3,1);position:relative}
@@ -579,7 +594,36 @@ function colorCounts(hunters){ const m={}; hunters.forEach(x=>{ if(x.color){ con
 /* ==================== shared view bits ==================== */
 function brand(){
   const cols = ["#E23B3B","#F6C324","#2D6FD8","#2E9E5B","#F06EAA","#F57C1F","#7D3CC8","#1FB5AC","#1E1B17"];
-  return h("a",{class:"brand",href:"#",onclick:e=>{e.preventDefault();go("");}}, h("span",{class:"dots"}, cols.map(c=>h("i",{style:{background:c}}))), h("span",{class:"bt"},"Color Hunt"));
+  return h("div",{class:"row",style:"gap:6px"},
+    h("button",{class:"menubtn","aria-label":"Open menu",onclick:openMenu}, h("span"),h("span"),h("span")),
+    h("a",{class:"brand",href:"#",onclick:e=>{e.preventDefault();go("");}}, h("span",{class:"dots"}, cols.map(c=>h("i",{style:{background:c}}))), h("span",{class:"bt"},"Color Hunt")));
+}
+function openMenu(){
+  if ($("#drawer")) return;
+  const close=()=>{ panel.classList.add("out"); ov.classList.add("out"); setTimeout(()=>wrap.remove(),200); document.removeEventListener("keydown",esc); };
+  const esc=e=>{ if(e.key==="Escape") close(); };
+  const v=S.route.v;
+  const link=(ic,label,fn,on,sub)=>h("button",{class:"dlink"+(on?" on":""),onclick:()=>{ close(); fn(); }}, h("span",{class:"dic"},ic), h("span",{style:"flex:1"},h("b",null,label), sub?h("span",{class:"dsub"},sub):null));
+  const panel=h("nav",{class:"drawer","aria-label":"Menu"},
+    h("div",{class:"row",style:"justify-content:space-between;margin-bottom:10px"},
+      h("div",{class:"brand"}, h("span",{class:"dots"}, ["#E23B3B","#F6C324","#2D6FD8","#2E9E5B","#F06EAA","#F57C1F","#7D3CC8","#1FB5AC","#1E1B17"].map(c=>h("i",{style:{background:c}}))), "Color Hunt"),
+      h("button",{class:"x",style:"position:static",onclick:()=>close(),"aria-label":"Close menu"},"✕")),
+    S.account ? h("div",{class:"dacct"}, h("div",{class:"avatar",style:{borderColor:INK,background:"#fff",width:"40px",height:"40px",fontSize:"16px",fontWeight:"700"}},initials(accountName())), h("div",null,h("b",null,accountName()),h("div",{class:"dsub"},S.account.email))) : null,
+    link("🏠","Home",()=>go(""),v==="home"),
+    link("📚","Library",()=>go("library"),v==="library","Your hunts"),
+    h("div",{class:"dsec"},"Start a hunt"),
+    link("🎨","Color Hunt",()=>go("create"),v==="create","Everyone gets a color"),
+    link("✨","Auto-Hunt",()=>go("auto"),v==="auto","Sort up to 100 photos by color"),
+    link("📋","More photo hunts",()=>go("hunts"),v==="hunts"||v==="scavnew","Scavenger, Alphabet, Numbers, Shapes"),
+    link("🔢","Join with a code",()=>{ go(""); setTimeout(()=>{ const i=$(".code-input"); if(i){ i.scrollIntoView({block:"center"}); i.focus(); } },120); }),
+    h("div",{class:"dsec"},"More"),
+    siteUrl() ? link("↗︎","Share Color Hunt",shareSite) : null,
+    link("☕","Support Color Hunt",openTipJar,false,"Leave a tip"),
+    AUTH ? (S.account ? link("👤","Account",openAccount) : link("👤","Sign in",()=>openSignIn())) : null);
+  const ov=h("div",{class:"drawer-ov",onclick:close});
+  const wrap=h("div",{id:"drawer"},ov,panel);
+  document.body.append(wrap); document.addEventListener("keydown",esc);
+  setTimeout(()=>{ const f=panel.querySelector(".dlink"); f&&f.focus(); },50);
 }
 function loadingView(text){ return h("div",{class:"wrap"}, h("div",{class:"topbar"},brand()), h("div",{class:"empty"}, h("span",{class:"spin dk"}), h("p",{style:"margin-top:12px"},text))); }
 function noDbView(){
@@ -633,7 +677,6 @@ function viewHome(){
       h("h3",null,"Start a new hunt"),
       h("p",{style:"opacity:.75"},"Pick your colors, choose how they're handed out, and share a 4-digit code with your group."),
       h("button",{class:"btn block",style:"background:#fff;color:var(--ink);border-color:#fff",onclick:()=>go("create")},"Create a hunt")),
-    h("button",{class:"card typecard",onclick:()=>go("hunts")}, h("div",{class:"typeic"},"📋"), h("div",{style:"flex:1;text-align:left"},h("div",{class:"eyebrow",style:"color:var(--ink)"},"New · More hunts"),h("h3",null,"Scavenger, Alphabet & more"),h("p",{class:"muted small"},"Everyone gets the same list of things to find — or play solo.")), h("span",{style:"font-size:22px"},"›")),
     h("div",{class:"card stack autocard"},
       h("div",{class:"row",style:"gap:12px"}, h("div",{class:"automark"}, ["#E23B3B","#F6C324","#2D6FD8","#2E9E5B"].map(c=>h("i",{style:{background:c}}))), h("div",null,h("div",{class:"eyebrow",style:"color:var(--ink)"},"New · Auto-Hunt"),h("h3",null,"Already have the photos?"))),
       h("p",{class:"muted"},`Upload up to ${AUTO_MAX} photos by yourself. We'll sort them into colors and lay out the book for you.`),
@@ -647,6 +690,7 @@ function viewHome(){
          ["Book","Collages build themselves: a cover, the hunters, a chapter per color, and a best-of finale."]]
         .map((s,i)=>h("div",null,h("b",{class:"n"},i+1),h("div",null,h("b",null,s[0]),h("p",{class:"muted small"},s[1])))))),
     bookPreview(),
+    h("button",{class:"card typecard",onclick:()=>go("hunts")}, h("div",{class:"typeic"},"📋"), h("div",{style:"flex:1;text-align:left"},h("div",{class:"eyebrow",style:"color:var(--ink)"},"More photo hunts"),h("h3",null,"Scavenger, Alphabet & more"),h("p",{class:"muted small"},"Everyone gets the same list of things to find — or play solo.")), h("span",{style:"font-size:22px"},"›")),
     siteFooter())
 }
 function bookPreview(){
@@ -1016,7 +1060,7 @@ function startScav(listId){ S.scav=null; S.scavStart=listId; go("scav-new"); }
 function viewHunts(){
   return h("div",{class:"wrap stack-lg"},
     h("div",{class:"topbar"}, brand(), acctBtn()),
-    h("div",null, h("div",{class:"eyebrow"},"More ways to play"), h("h2",{style:"margin-top:6px"},"Pick a hunt")),
+    h("div",null, h("div",{class:"eyebrow"},"Pick a hunt"), h("h2",{style:"margin-top:6px"},"More photo hunts")),
     h("div",{class:"stack"}, HUNT_TYPES.map(t=>h("button",{class:"card typecard",onclick:t.go},
       h("div",{class:"typeic"},t.icon), h("div",{style:"flex:1;text-align:left"}, h("h3",null,t.title), h("p",{class:"muted small"},t.desc)), h("span",{style:"font-size:22px"},"›")))),
     h("div",{class:"notice small"},"Every hunt turns into a photo book you can print, save as a PDF or post."),
