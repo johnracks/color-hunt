@@ -1191,7 +1191,7 @@ function myPanel(me, hunt, closed){
 
   const grid = h("div",{class:"photo-grid"},
     ps.map(p=>h("div",{class:"ph"},
-      h("img",{src:p.t,alt:"",loading:"lazy"}),
+      h("img",{src:p.t,alt:"",loading:"lazy",style:p.focus?{objectPosition:`${p.focus.x*100}% ${p.focus.y*100}%`}:null}),
       (p.place && me.best!==p.id) ? h("div",{class:"loc",title:p.place},"📍 "+p.place) : null,
       h("button",{class:"star"+(me.best===p.id?" on":""),title:"Make this my best photo","aria-label":"Mark as best",onclick:()=>setBest(me,p.id)},"★"),
       (!closed && !S.readOnly) ? h("button",{class:"del","aria-label":"Delete photo",onclick:async()=>{ if(await confirmDialog("Delete this photo?","It will be removed from the book.")) deletePhoto(p, me); }},"✕") : null,
@@ -1462,6 +1462,7 @@ async function savePhoto(me, out, opt={}){
   const doc = { hunter:me.id, w:c.width, h:c.height, t:toThumb(c,400,.62), createdAt:opt.createdAt||Date.now(), uid:S.uid };
   const meta = out.meta || {};
   if (meta.takenAt) doc.takenAt = meta.takenAt;
+  try{ const fo=await photoFocus(c); doc.focus=fo.focus; if(fo.faces.length) doc.faces=fo.faces; }catch(e){}
   if (meta.lat!=null){ doc.lat=meta.lat; doc.lng=meta.lng; const pn=await placeName(meta.lat,meta.lng); if(pn) doc.place=pn; }
   if (S.assets){
     try{ const blob = await canvasBlob(c,"image/jpeg",.88); const r = await S.assets.upload(blob,{type:"image/jpeg"}); doc.a = r.id; }
@@ -1665,6 +1666,104 @@ function chunkSizes(n){
 }
 function gridRect(cell, box, g){ const ux=(box.w+g)/12, uy=(box.h+g)/12; return {x:box.x+cell[0]*ux, y:box.y+cell[1]*uy, w:cell[2]*ux-g, h:cell[3]*uy-g}; }
 function aspectOf(p){ return (p.w&&p.h) ? p.w/p.h : 1; }
+/* ---------- keep-the-whole-photo collages ---------- */
+function compositions(n, maxParts){
+  const out=[]; const rec=(left,parts)=>{ if(!left){ out.push(parts); return; } if(parts.length>=maxParts) return; for(let k=1;k<=Math.min(left,3);k++) rec(left-k,[...parts,k]); };
+  rec(n,[]); return out;
+}
+function layoutJustified(ps, box, prevKey, g=18){
+  const n=ps.length;
+  if (n===1){ return {key:"1",items:[{r:containRect(ps[0],box),p:ps[0]}]}; }
+  let best=null;
+  for (const mode of ["rows","cols"]){
+    const W = mode==="rows"?box.w:box.h, H = mode==="rows"?box.h:box.w;
+    for (const comp of compositions(n, n<=3?3:4)){
+      if (comp.length===1 && n>3) continue;
+      let idx=0; const groups=comp.map(k=>{ const gp=ps.slice(idx,idx+k); idx+=k; return gp; });
+      const A=groups.map(gp=>gp.reduce((s,p)=>s+(mode==="rows"?aspectOf(p):1/aspectOf(p)),0));
+      const denom=groups.reduce((s,gp,i)=>s+(W-g*(gp.length-1))/A[i],0);
+      let f=(H-g*(groups.length-1))/denom; if(f>1) f=1;
+      const sizes=groups.map((gp,i)=>f*(W-g*(gp.length-1))/A[i]);
+      const usedH=sizes.reduce((s,x)=>s+x,0)+g*(groups.length-1);
+      let y=(H-usedH)/2, area=0, minSide=1e9; const items=[];
+      groups.forEach((gp,i)=>{
+        const lineH=sizes[i]; const ws=gp.map(p=>lineH*(mode==="rows"?aspectOf(p):1/aspectOf(p)));
+        const lineW=ws.reduce((s,x)=>s+x,0)+g*(gp.length-1); let x=(W-lineW)/2;
+        gp.forEach((p,j)=>{ const r = mode==="rows" ? {x:box.x+x,y:box.y+y,w:ws[j],h:lineH} : {x:box.x+y,y:box.y+x,w:lineH,h:ws[j]};
+          items.push({r,p}); area+=r.w*r.h; minSide=Math.min(minSide,r.w,r.h); x+=ws[j]+g; });
+        y+=lineH+g;
+      });
+      const key=mode+comp.join("");
+      let score=area/(box.w*box.h);
+      if (minSide<150) score-=0.15*(150-minSide)/150;
+      if (n>=3 && comp[0]===1) score+=0.02;
+      if (key===prevKey) score-=0.04;
+      if (!best || score>best.score) best={score,key,items};
+    }
+  }
+  return best;
+}
+/* ---------- smart crop: keep people whole, else keep the subject ---------- */
+function smartCrop(iw, ih, ra, p){
+  const ia=iw/ih; let sw,sh; if(ia>ra){ sh=ih; sw=sh*ra; } else { sw=iw; sh=sw/ra; }
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const place=(t)=>{ // fit crop window around target box t
+    const sx = clamp((t.x0+t.x1)/2 - sw/2, Math.max(0,t.x1-sw), Math.min(iw-sw, t.x0));
+    const room = sh-(t.y1-t.y0);
+    const sy = clamp(t.y0 - room*0.3, Math.max(0,t.y1-sh), Math.min(ih-sh, t.y0));
+    return [clamp(sx,0,iw-sw), clamp(sy,0,ih-sh), sw, sh];
+  };
+  if (p && p.faces && p.faces.length){
+    const B=p.faces.map(([x,y,w,h])=>({
+      body:{x0:(x-w*0.7)*iw, x1:(x+w*1.7)*iw, y0:(y-h*0.55)*ih, y1:Math.min(ih,(y+h*3.4)*ih)},
+      head:{x0:(x-w*0.15)*iw, x1:(x+w*1.15)*iw, y0:Math.max(0,(y-h*0.5)*ih), y1:Math.min(ih,(y+h*1.2)*ih)}, area:w*h }));
+    const U=list=>({x0:Math.min(...list.map(b=>b.x0)),x1:Math.max(...list.map(b=>b.x1)),y0:Math.min(...list.map(b=>b.y0)),y1:Math.max(...list.map(b=>b.y1))});
+    const fits=t=>(t.x1-t.x0)<=sw+0.5 && (t.y1-t.y0)<=sh+0.5;
+    const allBodies=U(B.map(b=>b.body)); if (fits(allBodies)) return place(allBodies);
+    // try many windows: reward whole heads, punish heads cut in half, then bodies
+    const maxA=Math.max(...B.map(b=>b.area));
+    const inside=(r,x,y)=>r.x0>=x-1 && r.x1<=x+sw+1 && r.y0>=y-1 && r.y1<=y+sh+1;
+    const overlaps=(r,x,y)=>r.x1>x && r.x0<x+sw && r.y1>y && r.y0<y+sh;
+    let best=null; const stepsX=iw-sw>1?24:0, stepsY=ih-sh>1?16:0;
+    for (let i=0;i<=stepsX;i++) for (let j=0;j<=stepsY;j++){
+      const x=stepsX?(iw-sw)*i/stepsX:0, y=stepsY?(ih-sh)*j/stepsY:0; let sc=0;
+      B.forEach(b=>{ const wgt=0.6+0.4*b.area/maxA;
+        if (inside(b.head,x,y)) sc+=2*wgt; else if (overlaps(b.head,x,y)) sc-=2.5*wgt;
+        if (inside(b.body,x,y)) sc+=0.5*wgt; else if (overlaps(b.body,x,y)) sc-=0.15*wgt; });
+      const hc=U(B.map(b=>b.head)); sc-=0.15*Math.abs((x+sw/2)-(hc.x0+hc.x1)/2)/iw;
+      if (!best || sc>best.sc) best={sc,x,y};
+    }
+    return [best.x, best.y, sw, sh];
+  }
+  const f=(p&&p.focus)||{x:.5,y:.5};
+  return [clamp(f.x*iw-sw/2,0,iw-sw), clamp(f.y*ih-sh/2,0,ih-sh), sw, sh];
+}
+/* ---------- find faces / subject when a photo is saved ---------- */
+let faceApiP=null;
+function loadFaceApi(){
+  if (!WEB) return Promise.resolve(null);
+  if (!faceApiP) faceApiP=(async()=>{ if(!window.faceapi) await loadScript("vendor/face-api.js"); await window.faceapi.nets.tinyFaceDetector.loadFromUri("vendor/models"); return window.faceapi; })().catch(e=>{ console.warn("face detection unavailable",e); return null; });
+  return faceApiP;
+}
+async function detectFaces(c){
+  const fa=await loadFaceApi(); if(!fa) return [];
+  const sc=Math.min(1,640/Math.max(c.width,c.height)); const t=document.createElement("canvas"); t.width=Math.round(c.width*sc); t.height=Math.round(c.height*sc); t.getContext("2d").drawImage(c,0,0,t.width,t.height);
+  const dets=await fa.detectAllFaces(t,new fa.TinyFaceDetectorOptions({inputSize:512,scoreThreshold:0.35}));
+  return dets.map(d=>{ const b=d.box; return [b.x/t.width,b.y/t.height,b.width/t.width,b.height/t.height].map(v=>+v.toFixed(4)); }).filter(f=>f[2]>0.02).slice(0,10);
+}
+function saliencyFocus(c){
+  const N=48, t=document.createElement("canvas"); t.width=N; t.height=N; const x=t.getContext("2d",{willReadFrequently:true}); x.drawImage(c,0,0,N,N);
+  const d=x.getImageData(0,0,N,N).data; let sx=0,sy=0,sw=0;
+  for (let i=0;i<d.length;i+=4){ const p=i/4, px=(p%N)/(N-1), py=Math.floor(p/N)/(N-1); const lab=rgb2lab(d[i],d[i+1],d[i+2]); const C=Math.hypot(lab[1],lab[2]);
+    const w=Math.pow(Math.max(0,C-10)/40,1.5)*(1-0.7*Math.min(1,Math.hypot(px-.5,py-.5)/0.7071))+0.02; sx+=px*w; sy+=py*w; sw+=w; }
+  const fx=sx/sw, fy=sy/sw; return {x:+(0.5+(fx-0.5)*0.8).toFixed(3), y:+(0.5+(fy-0.5)*0.8).toFixed(3)};
+}
+async function photoFocus(c){
+  let faces=[]; try{ faces=await detectFaces(c); }catch(e){}
+  if (faces.length){ let ax=0,ay=0,aw=0; faces.forEach(([x,y,w,h])=>{ const a=w*h; ax+=(x+w/2)*a; ay+=(y+h*0.9)*a; aw+=a; }); return {faces, focus:{x:+(ax/aw).toFixed(3), y:+Math.min(0.85,ay/aw).toFixed(3)}}; }
+  return {faces:[], focus:saliencyFocus(c)};
+}
+
 function layoutPhotos(ps, box, prevKey, g=12){
   const n=ps.length;
   if (n===1){ const a=aspectOf(ps[0]), ba=box.w/box.h; let w,hh; if(a>ba){w=box.w;hh=w/a;}else{hh=box.h;w=hh*a;} return {key:"1",items:[{r:{x:box.x+(box.w-w)/2,y:box.y+(box.h-hh)/2,w,h:hh},p:ps[0]}]}; }
@@ -1730,7 +1829,7 @@ function buildBook(){
   { const els=[];
     const topLine = hunt.place || hunt.occasion; if (topLine) els.push(eyebrow(topLine,500,98,{s:15,ls:.34,c:SOFT,w:860}));
     const hero={x:110,y:135,w:780,h:480};
-    if (coverP) els.push({t:"img",...hero,pid:coverP.id,r:10,ph:"#2a2626"});
+    if (coverP) els.push({t:"img",...containRect(coverP,hero),pid:coverP.id,r:10,ph:"#2a2626"});
     else { const cw=hero.w/Math.max(1,colors.length); colors.forEach((c,i)=>els.push({t:"fill",x:hero.x+i*cw,y:hero.y,w:cw+.5,h:hero.h,c})); }
     rainbowBar(els,110,645,780,7,colors);
     els.push(T(title,500,762,{f:"serif",s:74,w:840,maxLines:2,lh:1.02,c:CREAM,accent:GOLD}));
@@ -1761,7 +1860,7 @@ function buildBook(){
     const rest=ps.slice(1); let prev=null, idx=0;
     chunkSizes(rest.length).forEach(n=>{
       const slice=rest.slice(idx,idx+n); idx+=n;
-      const L=layoutPhotos(slice,{x:70,y:70,w:860,h:860},prev,18); prev=L.key;
+      const L=layoutJustified(slice,{x:70,y:70,w:860,h:860},prev,18); prev=L.key;
       const pe=L.items.map(it=>({t:"img",...it.r,pid:it.p.id,r:10,ph:mix(col,"#fff",.6)}));
       pages.push({kind:"photos",label:`${x.color.name} — ${x.name}`,els:pe,bg:CREAM_BG,hid:x.id});
     });
@@ -1789,7 +1888,7 @@ function buildBook(){
   if (spotP){ const els=[]; const r=containRect(spotP,{x:150,y:80,w:700,h:840}); framedPhoto(els,r,GOLD,spotP.id,12,14,"#2a2626"); pages.push({kind:"spotlight",label:"Spotlight",els,bg:DARK}); }
   // ---- closing
   { const els=[];
-    if (closeP) els.push({t:"img",x:110,y:130,w:780,h:540,pid:closeP.id,r:10,ph:"#2a2626"});
+    if (closeP) els.push({t:"img",...containRect(closeP,{x:110,y:130,w:780,h:540}),pid:closeP.id,r:10,ph:"#2a2626"});
     const dw=34; colors.slice(0,16).forEach((c,i,a)=>els.push({t:"circle",cx:500-(a.length-1)*dw/2+i*dw,cy:735,r:11,c:onDark(c)}));
     els.push(T(hunt.tagline||title,500,815,{f:"serif",s:40,c:CREAM,w:860,maxLines:2}));
     els.push(eyebrow([hunt.tagline?title:(hunt.occasion||hunt.place),hunt.date].filter(Boolean).join("  –  "),500,885,{s:15,ls:.32,c:SOFT,w:860}));
@@ -1854,7 +1953,7 @@ async function drawPage(page, size, canvas){
     else if (e.t==="img"){
       ctx.beginPath(); if(e.round){ ctx.arc(e.x+e.w/2,e.y+e.h/2,e.w/2,0,Math.PI*2); } else rr(ctx,e.x,e.y,e.w,e.h,e.r||0); ctx.clip();
       const im=imgs[i];
-      if (im && im.naturalWidth){ const ia=im.naturalWidth/im.naturalHeight, ra=e.w/e.h; let sw,sh,sx,sy; if(ia>ra){ sh=im.naturalHeight; sw=sh*ra; sx=(im.naturalWidth-sw)/2; sy=0; } else { sw=im.naturalWidth; sh=sw/ra; sx=0; sy=(im.naturalHeight-sh)/2; } ctx.drawImage(im,sx,sy,sw,sh,e.x,e.y,e.w,e.h); }
+      if (im && im.naturalWidth){ const [sx,sy,sw,sh]=smartCrop(im.naturalWidth, im.naturalHeight, e.w/e.h, e.pid?S.photoMap[e.pid]:null); ctx.drawImage(im,sx,sy,sw,sh,e.x,e.y,e.w,e.h); }
       else { ctx.fillStyle=e.ph||"#ddd"; ctx.fillRect(e.x,e.y,e.w,e.h); }
     }
     else if (e.t==="text"){

@@ -11,5 +11,8 @@ for f in ['config.js','web-shim.js','supabase-setup.sql','auth-policies.sql']: s
 shutil.copy(V+'sb/package/dist/umd/supabase.js', D+'vendor/supabase.js')
 shutil.copy(V+'jspdf-2.5.2/package/dist/jspdf.umd.min.js', D+'vendor/')
 shutil.copy(V+'jszip-3.10.1/package/dist/jszip.min.js', D+'vendor/')
+os.makedirs(D+'vendor/models',exist_ok=True)
+shutil.copy(V+'fa/package/dist/face-api.js', D+'vendor/face-api.js')
+for f in ['tiny_face_detector_model-weights_manifest.json','tiny_face_detector_model.bin']: shutil.copy(V+'fa/package/model/'+f, D+'vendor/models/'+f)
 open(D+'.nojekyll','w').write('')
 print('built', sorted(os.listdir(D)))
