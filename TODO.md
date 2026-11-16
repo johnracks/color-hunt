@@ -3,12 +3,19 @@
 ## Next features
 
 ### Map of finds
+**Done in the book as a paid upgrade (map pages per color + overview).** Still to do: an interactive map in the app.
+
 Show every hunter's photos on a map, pinned where they were taken.
 - Data is already being collected: each new photo with location info saves `lat`, `lng`, `place` and `takenAt`.
 - Map page per hunt (`#h1234-map`): pins colored by each hunter's color, tap a pin to see the photo.
 - Library: free map tiles from OpenStreetMap through Leaflet or MapLibre (no key needed for light use).
 - Optional extras: a "route" line in the order photos were taken, a map page in the photo book, and a per-hunter filter.
 - Note: iPhones often remove location from photos picked in a browser. Consider letting hunters tap "add location" by hand.
+
+### Before charging money
+- [ ] Connect Stripe Checkout for map pages and printed books (prices live in `PRICES` in the app; set `paymentsLive: true` in config.js when ready).
+- [ ] Pick a print-on-demand partner (Lulu, Prodigi, Gelato) and send saved print orders (`hunts/{code}/orders`) to it after payment.
+- [ ] Map tiles: switch from the free OpenStreetMap tiles to a commercial provider (for example MapTiler or Stadia Maps, free tiers with an API key). OSM's free tiles aren't meant for paid apps or heavy use.
 
 ### Sign-in options
 - [ ] Sign in with Shop: waiting on Shopify sign-in, then create a Shop sign-in app and add it as a custom provider in Supabase.

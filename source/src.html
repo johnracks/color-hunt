@@ -2077,7 +2077,7 @@ function bookCustomizeCards(){
 }
 
 /* ==================== MAP PAGES ==================== */
-const TILE_URL = (z,x,y)=>`https://${"abcd"[(x+y)%4]}.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}@2x.png`;
+const TILE_URL = (z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 const lng2x=(lng,z)=>(lng+180)/360*256*Math.pow(2,z);
 const lat2y=(lat,z)=>{ const r=Math.max(-85,Math.min(85,lat))*Math.PI/180; return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*256*Math.pow(2,z); };
 function mapView(pts,w,h){
@@ -2113,7 +2113,7 @@ function drawMap(ctx,e,tiles){
     if (p.label){ ctx.fillStyle=onColor(p.c); ctx.font="700 16px Poppins, system-ui, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(p.label,sx,sy+1); }
   });
   ctx.textBaseline="alphabetic";
-  if (any){ ctx.font="400 11px Poppins, system-ui, sans-serif"; ctx.textAlign="right"; const txt="© OpenStreetMap contributors © CARTO"; const w=ctx.measureText(txt).width; ctx.fillStyle="rgba(255,255,255,.8)"; ctx.fillRect(e.x+e.w-w-12,e.y+e.h-20,w+12,20); ctx.fillStyle="#555"; ctx.fillText(txt,e.x+e.w-6,e.y+e.h-6); }
+  if (any){ ctx.font="400 11px Poppins, system-ui, sans-serif"; ctx.textAlign="right"; const txt="© OpenStreetMap contributors"; const w=ctx.measureText(txt).width; ctx.fillStyle="rgba(255,255,255,.8)"; ctx.fillRect(e.x+e.w-w-12,e.y+e.h-20,w+12,20); ctx.fillStyle="#555"; ctx.fillText(txt,e.x+e.w-6,e.y+e.h-6); }
 }
 function mapPagesFor(x, ps){
   const located=ps.filter(p=>p.lat!=null&&p.lng!=null); if(!located.length) return null;
