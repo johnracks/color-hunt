@@ -184,6 +184,15 @@ body.hasnav #toasts{bottom:calc(86px + env(safe-area-inset-bottom))}
 .covimg{width:100%;aspect-ratio:4/3;border-radius:12px;background:#E9E3D8 center/cover no-repeat;display:flex;align-items:center;justify-content:center}
 .upg{display:flex;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
 .upgic{width:44px;height:44px;border-radius:12px;background:#F1EBE1;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
+.typecard{display:flex;gap:14px;align-items:center;width:100%;text-align:left;background:#fff}
+.typeic{width:52px;height:52px;border-radius:14px;background:#F1EBE1;display:flex;align-items:center;justify-content:center;font-size:26px;flex:none}
+.tipcard{display:flex;gap:12px;align-items:center;width:100%;max-width:480px;background:#FFF8E6;border-color:#F2DC8B}
+.scavlist{display:flex;flex-direction:column}
+.scavrow{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+.scavrow:first-child{border-top:0}
+.scavrow.done span{color:var(--muted)}
+.scavn{width:32px;height:32px;border-radius:50%;background:#F1EBE1;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none;color:var(--ink)!important}
+.scavthumb{width:44px;height:44px;border-radius:10px;background:#ddd center/cover;flex:none;border:2px solid #2E9E5B}
 /* modals */
 #modals .ov{position:fixed;inset:0;background:rgba(20,17,13,.55);display:flex;align-items:flex-end;justify-content:center;z-index:50;animation:fade .2s}
 .sheet{background:var(--card);width:100%;max-width:560px;max-height:94vh;overflow:auto;border-radius:24px 24px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:up .28s cubic-bezier(.2,.9,.3,1);position:relative}
@@ -495,6 +504,8 @@ function parseRoute(){
   if (x==="create") return {v:"create"};
   if (x==="library") return {v:"library"};
   if (x==="auto") return {v:"auto"};
+  if (x==="hunts") return {v:"hunts"};
+  if (x==="scav-new") return {v:"scavnew"};
   if ((m = x.match(/^h(\d{4})(-book)?$/))) return {v: m[2] ? "book" : "hunt", code:m[1]};
   return {v:"home"};
 }
@@ -535,6 +546,8 @@ function renderView(){
   else if (v==="create") node = viewCreate();
   else if (v==="library") node = viewLibrary();
   else if (v==="auto") node = viewAuto();
+  else if (v==="hunts") node = viewHunts();
+  else if (v==="scavnew") node = viewScavNew();
   else if (v==="hunt") node = viewHunt();
   else if (v==="book") node = viewBook();
   else node = viewHome();
@@ -620,6 +633,7 @@ function viewHome(){
       h("h3",null,"Start a new hunt"),
       h("p",{style:"opacity:.75"},"Pick your colors, choose how they're handed out, and share a 4-digit code with your group."),
       h("button",{class:"btn block",style:"background:#fff;color:var(--ink);border-color:#fff",onclick:()=>go("create")},"Create a hunt")),
+    h("button",{class:"card typecard",onclick:()=>go("hunts")}, h("div",{class:"typeic"},"📋"), h("div",{style:"flex:1;text-align:left"},h("div",{class:"eyebrow",style:"color:var(--ink)"},"New · More hunts"),h("h3",null,"Scavenger, Alphabet & more"),h("p",{class:"muted small"},"Everyone gets the same list of things to find — or play solo.")), h("span",{style:"font-size:22px"},"›")),
     h("div",{class:"card stack autocard"},
       h("div",{class:"row",style:"gap:12px"}, h("div",{class:"automark"}, ["#E23B3B","#F6C324","#2D6FD8","#2E9E5B"].map(c=>h("i",{style:{background:c}}))), h("div",null,h("div",{class:"eyebrow",style:"color:var(--ink)"},"New · Auto-Hunt"),h("h3",null,"Already have the photos?"))),
       h("p",{class:"muted"},`Upload up to ${AUTO_MAX} photos by yourself. We'll sort them into colors and lay out the book for you.`),
@@ -651,6 +665,7 @@ function bookPreview(){
 }
 function siteFooter(){
   return h("div",{class:"footer"},
+    h("button",{class:"card tipcard",onclick:openTipJar}, h("span",{style:"font-size:30px"},"☕"), h("div",{style:"flex:1;text-align:left"},h("b",null,"Support Color Hunt"),h("p",{class:"muted small"},"It's free to play. Tips keep it going.")), h("span",{class:"btn sm"},"Tip")),
     h("div",{class:"row",style:"justify-content:center"}, h("span",{class:"dots"}, ["#E23B3B","#F6C324","#2D6FD8","#2E9E5B","#F06EAA","#F57C1F","#7D3CC8","#1FB5AC","#1E1B17"].map(c=>h("i",{style:{background:c}})))),
     siteUrl() ? h("button",{class:"btn soft",onclick:shareSite},"↗︎  Share Color Hunt with friends") : null,
     h("p",{class:"muted small"},"Made for road trips, holidays, reunions and everything in between."));
@@ -946,6 +961,245 @@ function viewAuto(){
   return root;
 }
 
+/* ==================== TIPS & DIGITAL DOWNLOADS ==================== */
+const DONATE_URL = (window.CH_CONFIG && window.CH_CONFIG.donateUrl) || "";
+function openTipJar(){
+  const amounts=[1,3,5,10];
+  openModal(h("div",{class:"stack",style:"text-align:center"},
+    h("div",{style:"font-size:48px"},"☕"), h("h2",null,"Support Color Hunt"),
+    h("p",{class:"muted"},"Color Hunt is free to play. If it made your trip a little more fun, a small tip keeps it going."),
+    DONATE_URL ? h("div",{class:"stack"},
+        h("div",{class:"row",style:"justify-content:center;gap:8px;flex-wrap:wrap"}, amounts.map(a=>h("a",{class:"btn soft",href:DONATE_URL,target:"_blank",rel:"noopener"},`$${a}`))),
+        h("a",{class:"btn block lg",href:DONATE_URL,target:"_blank",rel:"noopener"},"Leave a tip"))
+      : h("div",{class:"notice small"},"The tip jar is almost ready — check back soon. Thank you!")));
+}
+async function unlockDigital(){
+  const hu=S.hunt; if (!hu) return false;
+  if ((hu.premium && hu.premium.digital) || LS.get("dl."+S.code,false)) return true;
+  return new Promise(res=>{
+    let done=false;
+    const finish=async(ok)=>{ if(done) return; done=true; m.close(); if(ok){ LS.set("dl."+S.code,true); try{ await tryWrite(()=>S.db.doc("hunts/"+S.code).update({premium:{...(S.hunt.premium||{}),digital:true}})); }catch(e){} } res(ok); };
+    const m=openModal(h("div",{class:"stack"},
+      h("div",{class:"eyebrow"},"Download your book"), h("h2",null,`${money(PRICES.digital)} for every format`),
+      h("p",{class:"muted"},"One small payment unlocks the print-ready PDF, the digital PDF, the social posts and single-page saves for this book — for everyone in the hunt."),
+      PAYMENTS_LIVE ? h("button",{class:"btn block lg",onclick:()=>toast("Checkout is coming soon")},`Pay ${money(PRICES.digital)}`)
+        : h("div",{class:"stack"},
+            h("div",{class:"notice small"},"Payments aren't switched on yet, so downloads are free while you test."),
+            h("button",{class:"btn block lg",onclick:()=>finish(true)},"Download free (testing)")),
+      h("button",{class:"btn soft block",onclick:()=>openTipJar()},"☕ Add a tip instead"),
+      h("button",{class:"btn ghost block",onclick:()=>finish(false)},"Not now")),{onClose:()=>{ if(!done){ done=true; res(false); } }});
+  });
+}
+
+/* ==================== MORE HUNTS / SCAVENGER ==================== */
+const SCAV_LISTS = [
+  {id:"roadtrip", name:"Road trip", icon:"🚗", items:["A funny road sign","Something red","A gas station snack","A cow or a horse","A license plate from another state","A cloud shaped like something","A bridge","A water tower","Someone asleep in the car","A souvenir","A 'Welcome to' sign","The best view of the trip"]},
+  {id:"town", name:"Around town", icon:"🏙", items:["A mural","A dog on a walk","Something with your initial","A clock","A bicycle","A flower","A funny sign","A statue","Something round","A food truck","A reflection","A door you love"]},
+  {id:"nature", name:"Nature walk", icon:"🌲", items:["A feather","A mushroom","A bird","Something heart-shaped","A pinecone","A wildflower","Moss","A bug","A cool rock","Animal tracks","Something yellow","The tallest tree"]},
+  {id:"beach", name:"Beach day", icon:"🏖", items:["A seashell","A sandcastle","A beach umbrella","Footprints in the sand","A seagull","A boat","Sunglasses","A lifeguard stand","Something blue","A crab","Ice cream","The sunset"]},
+  {id:"holiday", name:"Holiday", icon:"🎄", items:["Twinkle lights","A wreath","Something sparkly","A snowman","Hot cocoa","A gift bow","An ugly sweater","A candle","A pine tree","Something red and green","A cookie","A family selfie"]},
+  {id:"party", name:"Party or event", icon:"🎉", items:["The cake","Someone dancing","The best outfit","A group selfie","Balloons","A toast","Something sparkly","The guest of honor","A funny face","Party favors","The decorations","The last ones there"]},
+  {id:"kids", name:"Kids & backyard", icon:"🧸", items:["Something soft","Something tiny","A leaf bigger than your hand","A circle","Something that starts with B","A toy","Your favorite color","Something bumpy","A shadow","Something that smells good","A bug","A happy face"]},
+  {id:"alphabet", name:"Alphabet", icon:"🔤", items:"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l=>`Something that starts with ${l}`)},
+  {id:"numbers", name:"Numbers 1–10", icon:"🔢", items:Array.from({length:10},(_,i)=>`The number ${i+1}`)},
+  {id:"shapes", name:"Shapes", icon:"🔷", items:["A circle","A square","A triangle","A star","A heart","A spiral","A hexagon","An arrow","A diamond","An oval"]},
+];
+const HUNT_TYPES = [
+  {key:"color", title:"Color Hunt", icon:"🎨", desc:"Everyone gets a color and photographs everything they can find in it.", go:()=>go("create")},
+  {key:"auto", title:"Auto-Hunt", icon:"✨", desc:"Already have the photos? Upload up to 100 and we'll sort them by color.", go:()=>go("auto")},
+  {key:"scav", title:"Scavenger Hunt", icon:"📋", desc:"Everyone gets the same list of things to find. Play as a group or solo.", go:()=>startScav("roadtrip")},
+  {key:"alphabet", title:"Alphabet Hunt", icon:"🔤", desc:"Find something for every letter, A to Z.", go:()=>startScav("alphabet")},
+  {key:"numbers", title:"Number Hunt", icon:"🔢", desc:"Spot the numbers 1 to 10 out in the wild.", go:()=>startScav("numbers")},
+  {key:"shapes", title:"Shape Hunt", icon:"🔷", desc:"Circles, stars, spirals and more — find every shape.", go:()=>startScav("shapes")},
+];
+function startScav(listId){ S.scav=null; S.scavStart=listId; go("scav-new"); }
+function viewHunts(){
+  return h("div",{class:"wrap stack-lg"},
+    h("div",{class:"topbar"}, brand(), acctBtn()),
+    h("div",null, h("div",{class:"eyebrow"},"More ways to play"), h("h2",{style:"margin-top:6px"},"Pick a hunt")),
+    h("div",{class:"stack"}, HUNT_TYPES.map(t=>h("button",{class:"card typecard",onclick:t.go},
+      h("div",{class:"typeic"},t.icon), h("div",{style:"flex:1;text-align:left"}, h("h3",null,t.title), h("p",{class:"muted small"},t.desc)), h("span",{style:"font-size:22px"},"›")))),
+    h("div",{class:"notice small"},"Every hunt turns into a photo book you can print, save as a PDF or post."),
+    siteFooter());
+}
+function viewScavNew(){
+  if (!S.db) return noDbView();
+  if (AUTH && !S.account) return h("div",{class:"wrap stack-lg"}, h("div",{class:"topbar"}, brand(), h("a",{class:"btn ghost sm",href:"#hunts"},"Cancel")),
+    h("div",{class:"card stack",style:"text-align:center;padding:30px 20px"}, h("div",{style:"font-size:48px"},"📋"), h("h2",null,"Sign in to start a hunt"), h("p",{class:"muted"},"Your account keeps your hunts and photos together on any device."), h("button",{class:"btn lg block",onclick:()=>openSignIn("Start a hunt")},"Sign in or create an account")));
+  if (!S.scav){ const L=SCAV_LISTS.find(l=>l.id===(S.scavStart||"roadtrip"))||SCAV_LISTS[0];
+    S.scav={step:1,title:"",place:"",date:new Date().toLocaleString("en-US",{month:"long",year:"numeric"}),list:L.id,items:[...L.items],solo:false}; }
+  const st=S.scav, root=h("div",{class:"wrap stack-lg"}), STEPS=["Name it","Pick the list","Who's playing?"];
+  const field=(label,input,opt)=>h("label",{class:"field"},h("span",null,label," ",opt?h("span",{class:"muted",style:"font-weight:400"},"(optional)"):null),input);
+  const bind=(el,key)=>{ el.value=st[key]||""; el.addEventListener("input",()=>{ st[key]=el.value; }); return el; };
+  const draw=()=>{
+    let body;
+    if (st.step===1){
+      const L=SCAV_LISTS.find(l=>l.id===st.list);
+      body=h("div",{class:"card stack"},
+        field("Hunt name", bind(h("input",{placeholder:`e.g. ${L?L.name:"Our"} Scavenger Hunt`,maxlength:"60"}),"title")),
+        field("Where", bind(h("input",{placeholder:"e.g. Gulf Shores, Alabama",maxlength:"60"}),"place"), true),
+        field("Date", bind(h("input",{maxlength:"40"}),"date")));
+    } else if (st.step===2){
+      const addIn=h("input",{placeholder:"Add your own item",maxlength:"60"});
+      const add=()=>{ const v=addIn.value.trim(); if(!v) return; if(st.items.length>=40){ toast("Up to 40 items"); return; } st.items.push(v); addIn.value=""; draw(); };
+      addIn.addEventListener("keydown",e=>{ if(e.key==="Enter") add(); });
+      body=h("div",{class:"stack-lg"},
+        h("div",{class:"card stack"}, h("div",{class:"eyebrow"},"Start from a list"),
+          h("div",{class:"chips",style:"flex-wrap:wrap"}, SCAV_LISTS.map(l=>h("button",{class:"chip"+(st.list===l.id?" on":""),onclick:()=>{ st.list=l.id; st.items=[...l.items]; draw(); }}, l.icon+" "+l.name)))),
+        h("div",{class:"card stack"},
+          h("div",{class:"row"}, h("div",{class:"eyebrow"},"Things to find"), h("span",{class:"spacer"}), h("b",null,`${st.items.length}`)),
+          h("div",{class:"scavlist"}, st.items.map((t,i)=>h("div",{class:"scavrow"}, h("span",{class:"scavn"},i+1), h("span",{style:"flex:1"},t), h("button",{class:"swx",style:"position:static","aria-label":"Remove",onclick:()=>{ st.items.splice(i,1); draw(); }},"✕")))),
+          h("div",{class:"row"}, addIn, h("button",{class:"btn soft sm",onclick:add},"Add"))));
+    } else {
+      const opt=(solo,ic,t,d)=>h("button",{class:"mode-card"+(st.solo===solo?" on":""),onclick:()=>{ st.solo=solo; draw(); }},h("span",{class:"ic"},ic),h("div",null,h("b",null,t),h("span",null,d)));
+      body=h("div",{class:"stack-lg"},
+        h("div",{class:"card stack"}, h("div",{class:"mode-cards"},
+          opt(false,"👨‍👩‍👧","With a group","Everyone gets the same list. Share a 4-digit code."),
+          opt(true,"🙋","Just me","A solo hunt — no code needed."))),
+        h("div",{class:"notice small"},h("b",null,"Ready? "),`"${st.title||((SCAV_LISTS.find(l=>l.id===st.list)||{}).name||"")+" Scavenger Hunt"}" · ${st.items.length} things to find · ${st.solo?"solo":"group"}.`));
+    }
+    const nav=h("div",{class:"row",style:"gap:10px"},
+      st.step>1 ? h("button",{class:"btn ghost lg",style:"flex:1",onclick:()=>{ st.step--; draw(); window.scrollTo(0,0); }},"Back") : null,
+      st.step<3 ? h("button",{class:"btn lg",style:"flex:2",onclick:()=>{ if(st.step===2 && st.items.length<2){ toast("Add at least 2 things to find"); return; } st.step++; draw(); window.scrollTo(0,0); }},"Next") : null,
+      st.step===3 ? h("button",{class:"btn lg",style:"flex:2",onclick:createScav},"Start hunt") : null);
+    root.replaceChildren(
+      h("div",{class:"topbar"}, brand(), h("button",{class:"btn ghost sm",onclick:()=>{ S.scav=null; go("hunts"); }},"Cancel")),
+      h("div",null, h("div",{class:"eyebrow"},`Scavenger Hunt · Step ${st.step} of 3`), h("h2",{style:"margin:6px 0 12px"},STEPS[st.step-1]), h("div",{class:"stepbar"}, STEPS.map((_,i)=>h("i",{class:i<st.step?"on":""})))),
+      body, nav);
+  };
+  const createScav=async(e)=>{
+    const b=e.currentTarget; b.disabled=true; b.replaceChildren(h("span",{class:"spin"})," Starting…");
+    try{
+      const items=st.items.map(t=>({id:rid(6),text:t}));
+      const L=SCAV_LISTS.find(l=>l.id===st.list); const autoTitle=(L?L.name+" ":"")+(["alphabet","numbers","shapes"].includes(st.list)?"Hunt":"Scavenger Hunt");
+      const code=await createHunt({type:"scavenger", title:st.title.trim()||autoTitle, place:st.place.trim(), occasion:"", date:st.date.trim(), tagline:"", note:"", palette:[], items, solo:st.solo, mode:"order", unique:false, allowCustom:false, maxPhotos:items.length});
+      if (st.solo){ await joinScav(code, accountName()||"Me", null); }
+      S.scav=null; if(!st.solo) S.justCreated=code; go("h"+code);
+    }catch(err){ toast(errMsg(err),5000); b.disabled=false; b.textContent="Start hunt"; }
+  };
+  draw(); return root;
+}
+const SCAV_COLORS=["#E23B3B","#2D6FD8","#2E9E5B","#F57C1F","#7D3CC8","#F06EAA","#14A3A3","#D4A72C","#8B5A3C","#23366F","#9BCB3B","#C2188B"];
+async function joinScav(code, name, selfie){
+  const fresh=(await S.db.collection(`hunts/${code}/hunters`).get()).docs.map(d=>d.data());
+  const used=new Set(fresh.map(x=>x.color&&x.color.hex));
+  const hex=SCAV_COLORS.find(c=>!used.has(c)) || SCAV_COLORS[fresh.length%SCAV_COLORS.length];
+  const id=rid();
+  const doc={name, color:{name, hex}, selfie:selfie||null, uid:S.uid, joinedAt:Date.now(), best:null};
+  await tryWrite(()=>S.db.doc(`hunts/${code}/hunters/${id}`).set(doc));
+  const mine=LS.get("mine."+code,[]); mine.push(id); LS.set("mine."+code,mine); LS.set("active."+code,id);
+  recordMyHunt(code, (S.hunt&&S.hunt.title)||"Scavenger hunt", "hunter");
+  return {id,...doc};
+}
+function openScavJoin(){
+  const st={step:1,name:accountName(),selfie:null}; const body=h("div",{class:"stack"}); const m=openModal(body);
+  const draw=()=>{
+    if (st.step===1){
+      const inp=h("input",{placeholder:"Your name",value:st.name,maxlength:"30"});
+      const next=()=>{ st.name=inp.value.trim(); if(!st.name){ toast("Enter your name"); return; } st.step=2; draw(); };
+      inp.addEventListener("keydown",e=>{ if(e.key==="Enter") next(); });
+      body.replaceChildren(h("div",{class:"eyebrow"},"Step 1 of 2"), h("h2",null,"What's your name?"), inp, h("button",{class:"btn block lg",onclick:next},"Next"));
+      setTimeout(()=>inp.focus(),60);
+    } else {
+      const prev=h("div",{class:"framed",style:{width:"140px",margin:"8px auto",borderColor:"#1E1B17",backgroundImage:st.selfie?`url("${st.selfie}")`:"none",fontSize:"40px"}}, st.selfie?"":initials(st.name));
+      body.replaceChildren(h("div",{class:"eyebrow"},"Step 2 of 2"), h("h2",null,"Add a selfie"), h("p",{class:"muted"},"Optional — it goes on the players page of the book."), prev,
+        selfiePicker(url=>{ st.selfie=url; draw(); }),
+        h("div",{class:"row"}, h("button",{class:"btn ghost block",onclick:()=>{st.step=1;draw();}},"Back"),
+          h("button",{class:"btn block",onclick:async e=>{ e.currentTarget.disabled=true; try{ await joinScav(S.code, st.name, st.selfie); m.close(); toast("You're in — start finding!"); }catch(err){ toast(errMsg(err),5000); e.currentTarget.disabled=false; } }}, st.selfie?"Join hunt":"Skip & join")));
+    }
+  };
+  draw();
+}
+async function scavUpload(me, item, file){
+  let out; try{ out=await editImage(file,{title:item.text}); }catch(e){ toast("Couldn't open that photo"); return; }
+  if (!out || out==="cancel") return;
+  out.meta=await readPhotoMeta(file);
+  const old=S.photos.filter(p=>p.hunter===me.id && p.item===item.id);
+  S.pending++; renderUploadPill();
+  try{ await savePhoto(me,out,{item:item.id}); for (const p of old) await deletePhotoDocs(p); toast("Found it! ✓"); }
+  catch(e){ toast(errMsg(e),5000); }
+  finally{ S.pending--; renderUploadPill(); }
+}
+function viewScavHunt(){
+  const hunt=S.hunt, code=S.code, items=hunt.items||[];
+  const mine=myHunters(); const activeId=LS.get("active."+code,null); const me=mine.find(x=>x.id===activeId)||mine[0]||null;
+  const closed=hunt.status==="closed"; const H=sortedHunters();
+  const found=x=>new Set(S.photos.filter(p=>p.hunter===x.id && p.item).map(p=>p.item)).size;
+  const sections=[h("div",null,
+    h("div",{class:"eyebrow"},[hunt.solo?"Solo scavenger hunt":"Scavenger hunt", hunt.place, hunt.date].filter(Boolean).join(" · ")),
+    h("h2",{style:"margin:6px 0 10px"},hunt.title),
+    h("div",{class:"row wrap-row"}, h("span",{class:"pill"},`${items.length} things to find`), hunt.solo?null:h("span",{class:"pill"},`${H.length} player${H.length===1?"":"s"}`), closed?h("span",{class:"pill",style:"background:#1E1B17;color:#fff;border-color:#1E1B17"},"Finished"):null))];
+  if (mine.length>1) sections.push(h("div",{class:"chips"}, mine.map(x=>h("button",{class:"chip"+(me&&x.id===me.id?" on":""),onclick:()=>{LS.set("active."+code,x.id);renderView();}}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:x.color.hex,display:"block"}}), x.name))));
+  if (me){
+    const n=found(me);
+    const card=h("div",{class:"colorcard",style:{background:"#1E1B17",color:"#fff"}},
+      h("div",{class:"eyebrow",style:"color:#fff;opacity:.7"},`${me.name}'s list`),
+      h("div",{class:"big",style:"margin:8px 0 12px;font-size:44px"},`${n} of ${items.length}`),
+      h("div",{class:"progress",style:{background:"rgba(255,255,255,.2)"}},h("i",{style:{width:(items.length?n/items.length*100:0)+"%",background:me.color.hex}})),
+      n===items.length && items.length ? h("p",{style:"margin-top:12px;font-weight:600"},"🎉 You found everything!") : null);
+    const list=h("div",{class:"card stack"}, h("h3",null,"Things to find"),
+      h("div",{class:"scavlist"}, items.map((it,i)=>{ const p=S.photos.find(q=>q.hunter===me.id && q.item===it.id);
+        const fin=h("input",{type:"file",accept:"image/*",class:"sr",onchange:()=>{ const f=fin.files[0]; fin.value=""; if(f) scavUpload(me,it,f); }});
+        const pick=()=>{ if(AUTH&&!S.account){ requireAuth("Add photos"); return; } fin.click(); };
+        return h("div",{class:"scavrow"+(p?" done":"")},
+          p ? h("button",{class:"scavthumb",style:{backgroundImage:`url("${p.t}")`},onclick:(closed||S.readOnly)?null:pick,"aria-label":"Replace photo"}) : h("span",{class:"scavn"},i+1),
+          h("span",{style:"flex:1"},it.text),
+          (closed||S.readOnly) ? (p?h("span",null,"✓"):null) : h("button",{class:p?"btn ghost sm":"btn sm",onclick:pick}, p?"Redo":"📷 Add"), fin); })));
+    sections.push(card, list);
+  } else if (!closed && !S.readOnly && !hunt.solo){
+    sections.push(h("div",{class:"card stack",style:"text-align:center;padding:28px 20px"}, h("div",{style:"font-size:44px"},"📋"), h("h3",null,"Ready to play?"), h("p",{class:"muted"},`Join to get the list of ${items.length} things to find.`),
+      h("button",{class:"btn lg block",onclick:async()=>{ if(await requireAuth("Join the hunt")) openScavJoin(); }}, (AUTH&&!S.account)?"Sign in to join":"Join the hunt")));
+  }
+  sections.push(h("button",{class:"card",style:"display:flex;align-items:center;gap:16px;text-align:left;width:100%;background:#fff",onclick:()=>go("h"+code+"-book")},
+    h("div",{style:"font-size:36px"},"📖"), h("div",{style:"flex:1"},h("h3",null,"Open the photo book"),h("p",{class:"muted small"},"A page for every item — print, PDF & social posts")), h("span",{style:"font-size:22px"},"›")));
+  if (!hunt.solo) sections.push(h("div",{class:"card"}, h("div",{class:"eyebrow",style:"margin-bottom:6px"},"Players"),
+    H.length ? H.map(x=>{ const n=found(x); return h("div",{class:"list-item"},
+      h("div",{class:"avatar",style:{borderColor:x.color.hex,backgroundImage:x.selfie?`url("${x.selfie}")`:"none",background:x.selfie?undefined:mix(x.color.hex,"#fff",.6)}},x.selfie?"":initials(x.name)),
+      h("div",{style:"flex:1"}, h("b",null,x.name), h("div",{class:"progress",style:"margin-top:7px"},h("i",{style:{width:(items.length?n/items.length*100:0)+"%",background:x.color.hex}}))),
+      h("span",{class:"muted small"},`${n}/${items.length}`)); }) : h("p",{class:"muted",style:"padding:10px 0"},"No one has joined yet. Share the code to get started.")));
+  if (canManage()) sections.push(h("button",{class:"btn soft block",onclick:()=>openOrganizer()},"⚙︎  Organizer tools"));
+  return h("div",{class:"wrap stack-lg"},
+    h("div",{class:"topbar tight"}, brand(), h("div",{class:"row"}, hunt.solo?null:h("span",{class:"pill codechip"},code), hunt.solo?null:h("button",{class:"btn sm",onclick:()=>openShare(false)},"Invite"), acctBtn())),
+    sections);
+}
+function buildScavBook(){
+  const hunt=S.hunt, H=sortedHunters(), items=hunt.items||[], pages=[];
+  const title=hunt.title||"Scavenger Hunt"; const colors=H.map(x=>x.color.hex);
+  const all=S.photos.filter(p=>p.item); const coverP=S.photoMap[hunt.coverPhoto]||all[0]; const closeP=S.photoMap[hunt.closingPhoto]||all[all.length-1]||coverP;
+  { const els=[]; const top=hunt.place||(hunt.solo?"A solo scavenger hunt":"A scavenger hunt"); els.push(eyebrow(top,500,98,{s:15,ls:.34,c:SOFT,w:860}));
+    const hero={x:110,y:135,w:780,h:480};
+    if (coverP) els.push({t:"img",...containRect(coverP,hero),pid:coverP.id,r:10,ph:"#2a2626"}); else els.push({t:"fill",...hero,c:"#2a2626",r:10});
+    rainbowBar(els,110,645,780,7,colors.length?colors:["#E23B3B","#F6C324","#2D6FD8","#2E9E5B"]);
+    els.push(T(title,500,762,{f:"serif",s:74,w:840,maxLines:2,lh:1.02,c:CREAM,accent:GOLD}));
+    els.push(eyebrow(`${items.length} things to find`,500,895,{s:19,ls:.14,c:"#D6CCBE",w:840}));
+    pages.push({kind:"cover",label:"Cover",els,bg:DARK}); }
+  if (!hunt.solo && H.length){ const els=[eyebrow("Meet the",500,92,{s:16,ls:.4,c:MUTED}), T("Players",500,160,{f:"serif",s:76,w:860})];
+    cardGrid(els, H.slice(0,12).map(x=>({color:x.color.hex, selfie:x.selfie?x.id:null, name:x.name, sub:`${new Set(S.photos.filter(p=>p.hunter===x.id&&p.item).map(p=>p.item)).size} of ${items.length} found`, initial:initials(x.name)})), {x:60,y:225,w:880,h:715}, {aspect:.75,labelFrac:.3,maxCols:4,maxW:300, subColor:()=>MUTED});
+    pages.push({kind:"hunters",label:"Players",els,bg:CREAM_BG}); }
+  const label=(els,r,text,col)=>{ const s=Math.max(14,Math.min(22,r.w*.06)); const w=Math.min(r.w-16, text.length*s*.62+26); els.push({t:"fill",x:r.x+8,y:r.y+r.h-s*1.9-8,w,h:s*1.9,c:col,r:s*.95}); els.push(T(text,r.x+8+w/2,r.y+r.h-s*.95-8,{s,wt:700,c:onColor(col),w:w-12})); };
+  if (hunt.solo){
+    const done=items.map((it,i)=>({it,i,p:all.find(p=>p.item===it.id)})).filter(x=>x.p);
+    for (let k=0;k<done.length;k+=4){ const grp=done.slice(k,k+4); const els=[];
+      const L=layoutJustified(grp.map(g=>g.p),{x:70,y:70,w:860,h:860},null,18);
+      L.items.forEach(itm=>{ const g=grp.find(q=>q.p===itm.p); els.push({t:"img",...itm.r,pid:itm.p.id,r:10,ph:"#ddd"}); label(els,itm.r,`${g.i+1}. ${g.it.text}`,INK); });
+      pages.push({kind:"photos",label:`Finds ${k+1}–${k+grp.length}`,els,bg:CREAM_BG}); }
+  } else {
+    items.forEach((it,i)=>{ const ps=H.map(x=>({x,p:all.find(p=>p.hunter===x.id&&p.item===it.id)})).filter(q=>q.p); if(!ps.length) return;
+      const els=[eyebrow(`Item ${i+1} of ${items.length}`,500,70,{s:14,ls:.3,c:MUTED}), T(it.text,500,124,{f:"serif",s:46,w:860,maxLines:2,lh:1.02})];
+      const shown=ps.slice(0,9); const L=layoutJustified(shown.map(q=>q.p),{x:70,y:185,w:860,h:760},null,16);
+      L.items.forEach(itm=>{ const q=shown.find(s=>s.p===itm.p); els.push({t:"img",...itm.r,pid:itm.p.id,r:10,ph:mix(q.x.color.hex,"#fff",.6)}); label(els,itm.r,q.x.name,q.x.color.hex); });
+      pages.push({kind:"photos",label:it.text,els,bg:CREAM_BG}); });
+  }
+  if (hunt.premium && hunt.premium.maps){ const pins=all.filter(p=>p.lat!=null).map(p=>{ const x=H.find(y=>y.id===p.hunter); return {lat:p.lat,lng:p.lng,c:x?x.color.hex:INK}; });
+    if (pins.length>=1){ pages.push({kind:"map",label:"Where we hunted",bg:CREAM_BG,els:[eyebrow("Every find, everywhere",500,80,{s:15,ls:.3,c:MUTED}),T("Where we hunted",500,140,{f:"serif",s:56,w:860}),mapEl({x:70,y:195,w:860,h:700},pins)]}); } }
+  { const els=[]; if (closeP) els.push({t:"img",...containRect(closeP,{x:110,y:130,w:780,h:540}),pid:closeP.id,r:10,ph:"#2a2626"});
+    const dw=34; colors.slice(0,16).forEach((c,i,a)=>els.push({t:"circle",cx:500-(a.length-1)*dw/2+i*dw,cy:735,r:11,c}));
+    els.push(T(title,500,815,{f:"serif",s:40,c:CREAM,w:860,maxLines:2}));
+    els.push(eyebrow([hunt.place,hunt.date].filter(Boolean).join("  –  ")||"Scavenger hunt",500,885,{s:15,ls:.32,c:SOFT,w:860}));
+    pages.push({kind:"closing",label:"Closing",els,bg:DARK}); }
+  return pages;
+}
+
 /* ==================== LIBRARY ==================== */
 async function loadLibrary(){
   const uid=S.uid, m=new Map();
@@ -991,7 +1245,7 @@ function libCard(x){
       h("div",{class:"libstrip"}, pal.map(c=>h("i",{style:{background:c.hex}}))),
       h("div",{style:"padding:14px 16px 4px"},
         h("div",{class:"row",style:"gap:8px;margin-bottom:6px"}, h("span",{class:"pill",style:"padding:3px 9px;font-size:12px"},role), hu.status==="closed"?h("span",{class:"pill",style:"padding:3px 9px;font-size:12px"},"Finished"):null, h("span",{class:"spacer"}), h("span",{class:"muted small",style:"letter-spacing:.12em;font-weight:600"},x.code)),
-        h("h3",null,hu.title||"Color hunt"),
+        h("h3",null,(hu.type==="scavenger"?"📋 ":hu.auto?"✨ ":"")+(hu.title||"Color hunt")),
         h("p",{class:"muted small"},[hu.place||"",hu.occasion||"",hu.date||""].filter(Boolean).join(" · ")||" "))),
     h("div",{class:"row",style:"padding:10px 16px 14px;gap:8px"},
       h("a",{class:"btn sm",href:"#h"+x.code},"Open"),
@@ -1006,14 +1260,14 @@ const NAV_ICONS={
 function renderNav(){
   let nav=$("#bnav");
   const v=S.route.v;
-  if (!S.ready || !S.db || v==="create" || v==="auto"){ if(nav) nav.remove(); document.body.classList.remove("hasnav"); return; }
+  if (!S.ready || !S.db || v==="create" || v==="auto" || v==="scavnew"){ if(nav) nav.remove(); document.body.classList.remove("hasnav"); return; }
   if (!nav){ nav=h("nav",{id:"bnav","aria-label":"Main menu"}); document.body.append(nav); }
   document.body.classList.add("hasnav");
   const item=(key,label,icon,on,fn,cls)=>{ const b=h("button",{class:"nb"+(on?" on":"")+(cls?" "+cls:""),onclick:fn,"aria-label":label}); const ic=h("span",{class:"ni"}); ic.innerHTML=NAV_ICONS[icon]; b.append(ic,h("span",null,label)); return b; };
   nav.replaceChildren(
     item("home","Home","home",v==="home",()=>go("")),
     item("library","Library","library",v==="library",()=>go("library")),
-    item("new","New hunt","plus",false,()=>go("create"),"nbplus"),
+    item("new","New hunt","plus",v==="hunts",()=>go("hunts"),"nbplus"),
     AUTH ? item("acct", S.account?"Account":"Sign in","user",false,()=>S.account?openAccount():openSignIn()) : null);
 }
 
@@ -1143,6 +1397,7 @@ function viewHunt(){
     h("div",{class:"card stack"}, h("h2",null,"No hunt with code "+code), h("p",{class:"muted"},"Double-check the code with whoever invited you."), h("a",{class:"btn",href:"#"},"Back")));
   const hunt = S.hunt; rememberHunt(hunt);
   if (S.justCreated===code){ S.justCreated=null; setTimeout(()=>openShare(true),50); }
+  if (hunt.type==="scavenger") return viewScavHunt();
   const mine = myHunters();
   const activeId = LS.get("active."+code, null);
   const me = mine.find(x=>x.id===activeId) || mine[0] || null;
@@ -1509,6 +1764,7 @@ async function savePhoto(me, out, opt={}){
   const code=opt.code||S.code, pid=opt.pid||rid();
   const c = out.canvas;
   const doc = { hunter:me.id, w:c.width, h:c.height, t:toThumb(c,400,.62), createdAt:opt.createdAt||Date.now(), uid:S.uid };
+  if (opt.item) doc.item = opt.item;
   const meta = out.meta || {};
   if (meta.takenAt) doc.takenAt = meta.takenAt;
   try{ const fo=await photoFocus(c); doc.focus=fo.focus; if(fo.faces.length) doc.faces=fo.faces; }catch(e){}
@@ -1866,6 +2122,7 @@ function cardGrid(els, items, area, opts){
   });
 }
 function buildBook(){
+  if (S.hunt && S.hunt.type==="scavenger") return buildScavBook();
   const hunt=S.hunt, H=sortedHunters(), pages=[];
   const title=hunt.title||"Color Hunt";
   const colors=(H.length?H.map(x=>x.color.hex):(hunt.palette||[]).map(c=>c.hex));
@@ -2026,7 +2283,7 @@ async function drawPage(page, size, canvas){
 }
 
 /* ==================== PREMIUM & PRINT ==================== */
-const PRICES = { maps:2.99, softcover:29.99, hardcoverUp:15.00, premiumColorUp:9.99, includedPages:20, extraPage:0.75 };
+const PRICES = { digital:1.99, maps:2.99, softcover:29.99, hardcoverUp:15.00, premiumColorUp:9.99, includedPages:20, extraPage:0.75 };
 const PAYMENTS_LIVE = !!(window.CH_CONFIG && window.CH_CONFIG.paymentsLive);
 const money = v => "$"+v.toFixed(2);
 function canManage(){ const hu=S.hunt; return !!hu && (hu.createdBy===S.uid || safe(()=>S.user && S.user.isOwner && S.user.isOwner())); }
@@ -2185,7 +2442,7 @@ function viewBook(){
         ex("🖨","Print-ready PDF","8 × 8 in at 300 dpi — for photo-book printers",()=>exportPDF("print")),
         ex("📖","Digital book PDF","Smaller file for texting & email",()=>exportPDF("digital")),
         ex("📱","Social posts","1080 × 1080 JPGs in a .zip — carousel-ready",()=>exportSocial())),
-      h("p",{class:"hint"},"Instagram carousels hold up to 20 slides. Tap ", h("b",null,"Save")," under any page to save just that one.")),
+      h("p",{class:"hint"},`Downloads are ${"$"+PRICES.digital} per book (all formats). Instagram carousels hold up to 20 slides.`)),
     h("div",{id:"bookcustom"}),
     h("div",{id:"bookfilter",style:"margin-top:20px"}),
     pagesEl);
@@ -2240,11 +2497,13 @@ async function saveFile(filename, blob){
   catch(e){ if(e && e.code==="declined") return false; toast(e&&e.code==="too_large"?"That file is too big here — try the digital PDF.":"Couldn't save the file.",4500); return false; }
 }
 async function savePage(i){
+  if (!(await unlockDigital())) return;
   const pr=progressOverlay("Preparing page…");
   try{ const cv=document.createElement("canvas"); await drawPage(S.pages[i],1440,cv); const b=await canvasBlob(cv,"image/jpeg",.92); pr.done(); await saveFile(`${slugify(S.hunt.title)}-page-${String(i+1).padStart(2,"0")}.jpg`, b); }
   catch(e){ pr.done(); toast("Couldn't make that image"); }
 }
 async function exportPDF(kind){
+  if (!(await unlockDigital())) return;
   const size = kind==="print"?2400:1300, q = kind==="print"?.9:.8;
   const pages=S.pages; const pr=progressOverlay(kind==="print"?"Building print-ready PDF…":"Building digital book…");
   try{
@@ -2264,6 +2523,7 @@ async function exportPDF(kind){
   }catch(e){ pr.done(); console.error(e); toast("Couldn't build the PDF: "+(e.message||e),5000); }
 }
 async function exportSocial(){
+  if (!(await unlockDigital())) return;
   const pages=S.pages; const pr=progressOverlay("Making social posts…");
   try{
     if (!window.JSZip) await loadScript(JSZIP_URL);
