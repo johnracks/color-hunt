@@ -164,6 +164,21 @@ body.hasnav #toasts{bottom:calc(86px + env(safe-area-inset-bottom))}
 .ph .loc{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.6));color:#fff;font-size:10px;font-weight:600;padding:12px 6px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brand{white-space:nowrap}
 @media(max-width:440px){.topbar.tight .bt{display:none}}
+.auto-grid{grid-template-columns:repeat(4,1fr)}
+@media(min-width:620px){.auto-grid{grid-template-columns:repeat(6,1fr)}}
+.swatch .swx{position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;background:#fff;font-size:12px;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.autocard{border:2px solid var(--ink)}
+.automark{width:44px;height:44px;flex:none;display:grid;grid-template-columns:1fr 1fr;gap:3px}.automark i{border-radius:6px;display:block}
+.autohint{align-self:flex-start;font-weight:600;font-size:14px;padding:10px 14px;border-radius:12px;background:#FFF3C8;width:100%;text-align:left}
+.seg{display:flex;background:#EAE3D6;border-radius:99px;padding:4px;gap:4px}
+.seg button{flex:1;padding:10px;border-radius:99px;font-weight:600;font-size:15px;color:var(--muted)}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.ph .ctag{position:absolute;left:4px;right:4px;bottom:4px;border-radius:99px;font-size:10px;font-weight:700;padding:3px 6px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.ph .beststar{position:absolute;left:5px;top:5px;width:22px;height:22px;border-radius:50%;background:#FFD23F;font-size:12px;display:flex;align-items:center;justify-content:center}
+.foundrow{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border-radius:14px;border:1.5px solid var(--line);background:#fff}
+.foundrow.on{border-color:var(--ink)}
+.foundrow .fsw{width:34px;height:34px;border-radius:10px;flex:none;display:block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.fbar{height:5px;border-radius:99px;background:#EEE8DD;margin-top:5px;overflow:hidden}.fbar i{display:block;height:100%;border-radius:99px}
 /* modals */
 #modals .ov{position:fixed;inset:0;background:rgba(20,17,13,.55);display:flex;align-items:flex-end;justify-content:center;z-index:50;animation:fade .2s}
 .sheet{background:var(--card);width:100%;max-width:560px;max-height:94vh;overflow:auto;border-radius:24px 24px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:up .28s cubic-bezier(.2,.9,.3,1);position:relative}
@@ -474,6 +489,7 @@ function parseRoute(){
   const x = (location.hash||"").replace(/^#/,""); let m;
   if (x==="create") return {v:"create"};
   if (x==="library") return {v:"library"};
+  if (x==="auto") return {v:"auto"};
   if ((m = x.match(/^h(\d{4})(-book)?$/))) return {v: m[2] ? "book" : "hunt", code:m[1]};
   return {v:"home"};
 }
@@ -513,6 +529,7 @@ function renderView(){
   if (!S.ready) node = loadingView("Opening Color Hunt…");
   else if (v==="create") node = viewCreate();
   else if (v==="library") node = viewLibrary();
+  else if (v==="auto") node = viewAuto();
   else if (v==="hunt") node = viewHunt();
   else if (v==="book") node = viewBook();
   else node = viewHome();
@@ -598,6 +615,10 @@ function viewHome(){
       h("h3",null,"Start a new hunt"),
       h("p",{style:"opacity:.75"},"Pick your colors, choose how they're handed out, and share a 4-digit code with your group."),
       h("button",{class:"btn block",style:"background:#fff;color:var(--ink);border-color:#fff",onclick:()=>go("create")},"Create a hunt")),
+    h("div",{class:"card stack autocard"},
+      h("div",{class:"row",style:"gap:12px"}, h("div",{class:"automark"}, ["#E23B3B","#F6C324","#2D6FD8","#2E9E5B"].map(c=>h("i",{style:{background:c}}))), h("div",null,h("div",{class:"eyebrow",style:"color:var(--ink)"},"New · Auto-Hunt"),h("h3",null,"Already have the photos?"))),
+      h("p",{class:"muted"},`Upload up to ${AUTO_MAX} photos by yourself. We'll sort them into colors and lay out the book for you.`),
+      h("button",{class:"btn soft block",onclick:()=>go("auto")},"Try Auto-Hunt")),
     listBox,
     h("div",{class:"card"},
       h("div",{class:"eyebrow",style:"margin-bottom:14px"},"How it works"),
@@ -628,6 +649,242 @@ function siteFooter(){
     h("div",{class:"row",style:"justify-content:center"}, h("span",{class:"dots"}, ["#E23B3B","#F6C324","#2D6FD8","#2E9E5B","#F06EAA","#F57C1F","#7D3CC8","#1FB5AC","#1E1B17"].map(c=>h("i",{style:{background:c}})))),
     siteUrl() ? h("button",{class:"btn soft",onclick:shareSite},"↗︎  Share Color Hunt with friends") : null,
     h("p",{class:"muted small"},"Made for road trips, holidays, reunions and everything in between."));
+}
+
+/* ==================== AUTO-HUNT ==================== */
+const AUTO_MAX = 60;
+function rgb2lab(r,g,b){
+  const lin=v=>{ v/=255; return v>0.04045?Math.pow((v+0.055)/1.055,2.4):v/12.92; };
+  r=lin(r); g=lin(g); b=lin(b);
+  let x=(r*0.4124+g*0.3576+b*0.1805)/0.95047, y=(r*0.2126+g*0.7152+b*0.0722), z=(r*0.0193+g*0.1192+b*0.9505)/1.08883;
+  const f=t=>t>0.008856?Math.cbrt(t):(7.787*t+16/116); x=f(x); y=f(y); z=f(z);
+  return [116*y-16, 500*(x-y), 200*(y-z)];
+}
+const AUTO_CORE=["Red","Orange","Yellow","Green","Blue","Purple","Pink","Brown","Teal","Black","White"];
+function prepColor(c){ const lab=rgb2lab(...hexRgb(c.hex)); const C=Math.hypot(lab[1],lab[2]); return {...c, lab, neutral:C<14, kind: C>=14 ? "chroma" : (lab[0]>78 ? "white" : lab[0]<28 ? "black" : "gray")}; }
+function autoCandidates(all){
+  const seen=new Set(), out=[];
+  [...PALETTES[0].colors, ...BW, ...EXTRA_COLORS].forEach(([name,hex])=>{ const k=name.toLowerCase(); if(seen.has(k)) return; seen.add(k); if(!all && !AUTO_CORE.includes(name)) return; out.push(prepColor({name,hex:hex.toUpperCase()})); });
+  return out;
+}
+async function analyzeFile(file){
+  let bmp=null, w=0, hh=0, url=null;
+  try{ if (window.createImageBitmap){ bmp = await createImageBitmap(file); w=bmp.width; hh=bmp.height; } }catch(e){ bmp=null; }
+  if (!bmp){ url=URL.createObjectURL(file); bmp=await loadImg(url); w=bmp.naturalWidth; hh=bmp.naturalHeight; }
+  try{
+    const N=48, c=document.createElement("canvas"); c.width=N; c.height=N;
+    const x=c.getContext("2d",{willReadFrequently:true}); x.drawImage(bmp,0,0,N,N);
+    const d=x.getImageData(0,0,N,N).data; const px=new Float32Array(N*N*4);
+    for (let i=0,j=0;i<d.length;i+=4,j+=4){ const p=i/4, cx=(p%N)/(N-1)-.5, cy=Math.floor(p/N)/(N-1)-.5; const lab=rgb2lab(d[i],d[i+1],d[i+2]);
+      px[j]=lab[0]; px[j+1]=lab[1]; px[j+2]=lab[2]; px[j+3]=1-0.65*Math.min(1,Math.hypot(cx,cy)/0.7071); }
+    const sc=Math.min(1,420/Math.max(w,hh)); const t=document.createElement("canvas"); t.width=Math.max(1,Math.round(w*sc)); t.height=Math.max(1,Math.round(hh*sc));
+    const tx=t.getContext("2d"); tx.fillStyle="#fff"; tx.fillRect(0,0,t.width,t.height); tx.drawImage(bmp,0,0,t.width,t.height);
+    return { px, w, h:hh, t:t.toDataURL("image/jpeg",.62) };
+  } finally { if (bmp && bmp.close) bmp.close(); if (url) URL.revokeObjectURL(url); }
+}
+function votes(px, colors){
+  const v=new Float32Array(colors.length); let tot=0;
+  const chroma=[], byKind={white:[],black:[],gray:[]};
+  colors.forEach((c,k)=>{ if(c.kind==="chroma") chroma.push(k); else byKind[c.kind].push(k); });
+  for (let j=0;j<px.length;j+=4){
+    const L=px[j],A=px[j+1],B=px[j+2],w=px[j+3]; tot+=w;
+    const C=Math.hypot(A,B);
+    if (C>=15){
+      let bi=-1, bd=1e9;
+      for (const k of chroma){ const c=colors[k].lab; const dd=0.35*(L-c[0])**2+(A-c[1])**2+(B-c[2])**2; if(dd<bd){bd=dd;bi=k;} }
+      if (bi>=0 && bd<70*70) v[bi]+= w*Math.min(1,C/40)*(1-Math.sqrt(bd)/90);
+    } else {
+      const kind = L>80 ? "white" : L<24 ? "black" : "gray";
+      const ks=byKind[kind]; if (ks.length) v[ks[0]] += w*(kind==="gray"?0.18:0.42);
+    }
+  }
+  for (let k=0;k<v.length;k++) v[k]/=(tot||1);
+  return v;
+}
+function suggestColors(items, n){
+  const cands=autoCandidates(); const score=new Float32Array(cands.length);
+  items.forEach(it=>{ const v=votes(it.px,cands); v.forEach((x,k)=>score[k]+=x*x); });
+  const order=cands.map((c,k)=>({c,s:score[k]})).sort((a,b)=>b.s-a.s);
+  const out=[];
+  for (const o of order){ if (out.some(c=>colorDist(c.hex,o.c.hex)<70)) continue; out.push(o.c); if(out.length>=n) break; }
+  return out.map(c=>({name:c.name,hex:c.hex}));
+}
+function sortPhotos(items, colors){
+  const cols=colors.map(prepColor);
+  const conf=items.map(it=>votes(it.px,cols));
+  const n=items.length, N=cols.length, target=Math.ceil(n/N);
+  const rel=conf.map(c=>{ const m=Math.max(...c)||1; return Array.from(c,v=>v/m); });
+  const assign=new Array(n).fill(-1), count=new Array(N).fill(0);
+  // every color first gets the photo that suits it best
+  const colOrder=[...Array(N).keys()].sort((a,b)=>Math.max(...rel.map(r=>r[a]))-Math.max(...rel.map(r=>r[b])));
+  colOrder.forEach(k=>{ let bi=-1,bv=-1; rel.forEach((r,i)=>{ const sc=r[k]*0.7+conf[i][k]*3; if(assign[i]<0 && sc>bv){bv=sc;bi=i;} }); if(bi>=0 && rel[bi][k]>0.05){ assign[bi]=k; count[k]++; } });
+  // then fill colors evenly, strongest matches first
+  const pairs=[]; rel.forEach((r,i)=>{ if(assign[i]<0) r.forEach((v,k)=>pairs.push([v+conf[i][k],i,k])); });
+  pairs.sort((a,b)=>b[0]-a[0]);
+  for (const [v,i,k] of pairs){ if(assign[i]>=0 || count[k]>=target || rel[i][k]<0.12) continue; assign[i]=k; count[k]++; }
+  // leftovers: best color that still has room (one over target), else best overall
+  assign.forEach((a,i)=>{ if(a>=0) return; let bk=-1,bv=-1; rel[i].forEach((v,k)=>{ if(count[k]<=target && v>bv){bv=v;bk=k;} }); if(bk<0) bk=rel[i].indexOf(1); assign[i]=bk; count[bk]++; });
+  items.forEach((it,i)=>{ it.color=assign[i]; it.conf=conf[i][assign[i]]; });
+}
+function photoColors(it, chosen){
+  const all=autoCandidates(true); const v=votes(it.px,all);
+  const ranked=all.map((c,k)=>({c,v:v[k]})).filter(x=>x.v>0.015 && x.c.kind!=="gray").sort((a,b)=>b.v-a.v);
+  const top=ranked.length?ranked[0].v:1;
+  return ranked.slice(0,8).map(x=>({name:x.c.name,hex:x.c.hex,strength:x.v/top,inSet:chosen.findIndex(c=>c.name===x.c.name||colorDist(c.hex,x.c.hex)<30)}));
+}
+function autoBest(st){ const best={}; st.items.forEach((it,i)=>{ if(it.color<0) return; if(best[it.color]==null || it.conf>st.items[best[it.color]].conf) best[it.color]=i; }); st.best = Object.assign(best, st.bestManual||{}); }
+async function renderAutoPreview(st, container){
+  const saved={hunt:S.hunt, hunters:S.hunters, photos:S.photos, photoMap:S.photoMap};
+  const hunters=[], photos=[];
+  st.colors.forEach((c,k)=>{ const hid="pv-h"+k; const its=st.items.map((it,i)=>({it,i})).filter(x=>x.it.color===k); if(!its.length) return;
+    let best=null; its.forEach(({it,i},j)=>{ const pid="pv-"+(it.pvid||(it.pvid=rid(8))); photos.push({id:pid,hunter:hid,t:it.t,w:it.w,h:it.h,createdAt:j,place:null}); if(st.best[k]===i) best=pid; });
+    hunters.push({id:hid,name:st.name||"Me",color:{name:c.name,hex:c.hex},joinedAt:k,best}); });
+  const gen=(renderAutoPreview.gen=(renderAutoPreview.gen||0)+1);
+  S.hunt={title:st.title||"My Color Hunt",place:st.place,date:st.date,palette:st.colors.filter((_,k)=>hunters.some(h=>h.id==="pv-h"+k)),auto:true,author:st.name}; S.hunters=hunters; S.photos=photos; S.photoMap=Object.fromEntries(photos.map(p=>[p.id,p]));
+  let pages; try{ pages=buildBook(); } finally { Object.assign(S, saved); }
+  const size=Math.min(1100, Math.round(Math.min(window.innerWidth-36,760)*Math.min(2,window.devicePixelRatio||1)));
+  const shells=pages.map((p,i)=>{ const img=h("img",{alt:p.label,style:"display:none"}), ld=h("div",{class:"ld"},h("span",{class:"spin dk"})); const f=h("figure",{class:"bpage"},h("div",{class:"pg"},img,ld),h("figcaption",null,h("span",null,`${i+1} · ${p.label}`))); f._img=img; f._ld=ld; return f; });
+  container.replaceChildren(...shells);
+  const cv=document.createElement("canvas");
+  for (let i=0;i<pages.length;i++){
+    if (gen!==renderAutoPreview.gen || !document.body.contains(container)) return;
+    Object.assign(S,{hunt:{...S.hunt,palette:[]},hunters,photos,photoMap:Object.fromEntries(photos.map(p=>[p.id,p]))});
+    try{ await drawPage(pages[i],size,cv); } finally { Object.assign(S, saved); }
+    const b=await canvasBlob(cv,"image/jpeg",.82); shells[i]._img.src=URL.createObjectURL(b); shells[i]._img.style.display="block"; shells[i]._ld.remove();
+  }
+}
+function viewAuto(){
+  if (!S.db) return noDbView();
+  if (!S.auto) S.auto = { step:1, title:"", place:"", date:new Date().toLocaleString("en-US",{month:"long",year:"numeric"}), name:accountName(), items:[], n:6, colors:[], busy:false, bestManual:{} };
+  const st=S.auto, root=h("div",{class:"wrap stack-lg"});
+  const STEPS=["Add your photos","Choose colors","Check the sort"];
+  const fileIn=h("input",{type:"file",accept:"image/*",multiple:true,class:"sr",onchange:()=>{ const f=[...fileIn.files]; fileIn.value=""; addFiles(f); }});
+  const addFiles=async(files)=>{
+    files=files.filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));
+    const room=AUTO_MAX-st.items.length; if(room<=0){ toast(`Up to ${AUTO_MAX} photos`); return; }
+    if(files.length>room){ toast(`Only ${room} more — using the first ${room}.`,4000); files=files.slice(0,room); }
+    st.busy=true; st.colors=[]; let done=0; draw();
+    for (const f of files){
+      try{ const [a,meta]=await Promise.all([analyzeFile(f), readPhotoMeta(f)]); st.items.push({file:f, ...a, meta, color:-1}); }catch(e){ toast("Couldn't read one photo"); }
+      done++; const pr=$("#autoprog"); if(pr) pr.textContent=`Reading photos… ${done} of ${files.length}`;
+      if (done%4===0 && S.route.v==="auto") draw();
+    }
+    st.busy=false; if (S.route.v==="auto") draw();
+  };
+  const field=(label,input,opt)=>h("label",{class:"field"},h("span",null,label," ",opt?h("span",{class:"muted",style:"font-weight:400"},"(optional)"):null),input);
+  const bind=(el,key)=>{ el.value=st[key]||""; el.addEventListener("input",()=>{ st[key]=el.value; }); return el; };
+  const resort=()=>{ sortPhotos(st.items, st.colors); st.bestManual={}; autoBest(st); };
+  const draw=()=>{
+    let body, next=null;
+    if (st.step===1){
+      const title=bind(h("input",{placeholder:"e.g. Montana: In Color",maxlength:"60"}),"title");
+      const place=bind(h("input",{placeholder:"e.g. Glacier National Park",maxlength:"60"}),"place");
+      const name=bind(h("input",{placeholder:"Your name",maxlength:"30"}),"name");
+      body=h("div",{class:"stack-lg"},
+        h("div",{class:"card stack"}, field("Book title",title), field("Where",place,true), field("Photos by",name)),
+        h("div",{class:"card stack"},
+          h("div",{class:"row"}, h("h3",null,"Photos"), h("span",{class:"spacer"}), h("b",null,`${st.items.length} / ${AUTO_MAX}`)),
+          st.busy ? h("p",{class:"muted small",id:"autoprog"},h("span",{class:"spin dk",style:"width:12px;height:12px;vertical-align:-1px;margin-right:6px"}),"Reading photos…") : h("p",{class:"muted small"},"Pick your favorite photos from the trip. We'll sort them by color."),
+          st.items.length ? h("div",{class:"photo-grid auto-grid"}, st.items.map((it,i)=>h("div",{class:"ph"},h("img",{src:it.t,alt:""}),h("button",{class:"del","aria-label":"Remove photo",onclick:()=>{ st.items.splice(i,1); st.colors=[]; draw(); }},"✕")))) : null,
+          st.items.length<AUTO_MAX ? h("button",{class:"btn lg block"+(st.items.length?" soft":""),disabled:st.busy,onclick:()=>fileIn.click()}, st.items.length?"+ Add more photos":"Choose photos") : null,
+          fileIn));
+      next=()=>{ if(!st.title.trim()){ toast("Give your book a title"); return; } if(st.items.length<3){ toast("Add at least 3 photos"); return; } if(!st.name.trim()) st.name=accountName()||"Me";
+        if(!st.colors.length){ st.n=Math.min(st.n, st.items.length); st.colors=suggestColors(st.items, st.n); resort(); } st.step=2; draw(); window.scrollTo(0,0); };
+    } else if (st.step===2){
+      const counts=st.colors.map((_,k)=>st.items.filter(it=>it.color===k).length);
+      const setN=n=>{ n=Math.max(2,Math.min(12,n,st.items.length)); if(n===st.n) return; st.n=n; st.colors=suggestColors(st.items,n); resort(); draw(); };
+      const others=autoCandidates(true).filter(c=>!st.colors.some(x=>x.name===c.name||colorDist(x.hex,c.hex)<40));
+      body=h("div",{class:"stack-lg"},
+        h("div",{class:"card stack",style:"text-align:center"},
+          h("h3",null,"How many colors?"),
+          h("div",{class:"row",style:"justify-content:center;gap:18px"},
+            h("button",{class:"iconbtn",style:"width:56px;height:56px;font-size:26px","aria-label":"Fewer colors",onclick:()=>setN(st.n-1)},"−"),
+            h("div",{style:"font-size:48px;font-weight:800;min-width:70px"},String(st.n)),
+            h("button",{class:"iconbtn",style:"width:56px;height:56px;font-size:26px","aria-label":"More colors",onclick:()=>setN(st.n+1)},"+")),
+          h("p",{class:"muted small"},"We picked the colors that show up most in your photos.")),
+        h("div",{class:"card stack"},
+          h("div",{class:"eyebrow"},"Your colors"),
+          h("div",{class:"swatch-grid"}, st.colors.map((c,k)=>h("div",{class:"swatch on",style:"cursor:default"},
+            h("span",{class:"sw",style:{background:c.hex}}), h("span",{class:"nm"},c.name), h("span",{class:"sub"},`${counts[k]} photo${counts[k]===1?"":"s"}`),
+            st.colors.length>2 ? h("button",{class:"swx","aria-label":"Remove "+c.name,onclick:()=>{ st.colors.splice(k,1); st.n=st.colors.length; resort(); draw(); }},"✕") : null))),
+          h("div",{class:"eyebrow",style:"margin-top:6px"},"Swap in a different color"),
+          h("div",{class:"chips",style:"flex-wrap:wrap"}, others.map(c=>h("button",{class:"chip",onclick:()=>{ if(st.colors.length>=12){ toast("Up to 12 colors"); return; } st.colors.push({name:c.name,hex:c.hex}); st.n=st.colors.length; resort(); draw(); }}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:c.hex,display:"block",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.15)"}}), c.name)))));
+      next=()=>{ st.step=3; draw(); window.scrollTo(0,0); };
+    } else {
+      const counts=st.colors.map((_,k)=>st.items.filter(it=>it.color===k).length);
+      const viewTabs=h("div",{class:"seg"}, [["color","By color"],["book","Book preview"]].map(([k,l])=>h("button",{class:st.view===k?"on":"",onclick:()=>{ st.view=k; draw(); }},l)));
+      if (st.view==="book"){
+        const pages=h("div",{class:"book-pages",style:"margin-top:0"});
+        body=h("div",{class:"stack-lg"}, viewTabs, h("p",{class:"muted small"},"A quick preview using small copies of your photos. The saved book uses full quality."), pages);
+        setTimeout(()=>renderAutoPreview(st, pages), 30);
+      } else body=h("div",{class:"stack-lg"},
+        viewTabs,
+        h("div",{class:"notice small"},`${st.items.length} photos in ${st.colors.length} colors · ${Math.min(...counts)}–${Math.max(...counts)} per color. Tap a photo's color tag to change it.`),
+        st.colors.map((c,k)=>{ const its=st.items.map((it,i)=>({it,i})).filter(x=>x.it.color===k);
+          return h("div",{class:"card stack"},
+            h("div",{class:"row"}, h("i",{style:{width:"26px",height:"26px",borderRadius:"8px",background:c.hex,display:"block",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.12)"}}), h("h3",null,c.name), h("span",{class:"spacer"}), h("span",{class:"muted small"},`${its.length}`)),
+            its.length ? h("div",{class:"photo-grid auto-grid"}, its.map(({it,i})=>h("button",{class:"ph",onclick:()=>movePhoto(i),"aria-label":"Change color"}, h("img",{src:it.t,alt:""}), st.best[k]===i ? h("span",{class:"beststar"},"★") : null, h("span",{class:"ctag",style:{background:c.hex,color:onColor(c.hex)}}, c.name, " ▾")))) : h("p",{class:"muted small"},"No photos — move some here or remove this color."));
+        }));
+      next=null;
+    }
+    const nav=h("div",{class:"row",style:"gap:10px"},
+      st.step>1 ? h("button",{class:"btn ghost lg",style:"flex:1",onclick:()=>{ st.step--; draw(); window.scrollTo(0,0); }},"Back") : null,
+      next ? h("button",{class:"btn lg",style:"flex:2",disabled:st.busy,onclick:next},"Next") : null,
+      st.step===3 ? h("button",{class:"btn lg",style:"flex:2",onclick:makeBook},"Make my book") : null);
+    root.replaceChildren(
+      h("div",{class:"topbar"}, brand(), h("button",{class:"btn ghost sm",onclick:()=>{ S.auto=null; go(""); }},"Cancel")),
+      h("div",null, h("div",{class:"eyebrow"},`Auto-Hunt · Step ${st.step} of 3`), h("h2",{style:"margin:6px 0 12px"},STEPS[st.step-1]), h("div",{class:"stepbar"}, STEPS.map((_,i)=>h("i",{class:i<st.step?"on":""})))),
+      body, nav);
+  };
+  const movePhoto=(i)=>{
+    const it=st.items[i]; const cur=st.colors[it.color]||{};
+    const found=photoColors(it, st.colors);
+    const setColor=(k)=>{ const old=it.color; it.color=k; if(st.bestManual[old]===i) delete st.bestManual[old]; autoBest(st); m.close(); draw(); };
+    const m=openModal(h("div",{class:"stack"},
+      h("img",{src:it.t,alt:"",style:"width:100%;max-height:240px;object-fit:contain;border-radius:12px;background:#eee"}),
+      h("div",{class:"row"}, h("span",{class:"muted small"},"Now in"), h("span",{class:"chip on"}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:cur.hex,display:"block",boxShadow:"0 0 0 2px #fff"}}), cur.name||"—")),
+      found.length ? h("div",{class:"stack"}, h("div",{class:"eyebrow"},"Colors we see in this photo"),
+        found.map(f=>h("button",{class:"foundrow"+(f.inSet===it.color?" on":""),onclick:()=>{
+            if (f.inSet>=0) setColor(f.inSet);
+            else { if(st.colors.length>=12){ toast("Up to 12 colors"); return; } st.colors.push({name:f.name,hex:f.hex}); st.n=st.colors.length; setColor(st.colors.length-1); }
+          }},
+          h("i",{class:"fsw",style:{background:f.hex}}),
+          h("div",{style:"flex:1;text-align:left"}, h("b",null,f.name), h("div",{class:"fbar"},h("i",{style:{width:Math.max(8,Math.round(f.strength*100))+"%",background:f.hex}}))),
+          h("span",{class:"small muted"}, f.inSet===it.color ? "Current" : f.inSet>=0 ? "Move here" : "+ New color")))) : null,
+      h("div",{class:"eyebrow"},"All your colors"),
+      h("div",{class:"chips",style:"flex-wrap:wrap"}, st.colors.map((c,k)=>h("button",{class:"chip"+(it.color===k?" on":""),onclick:()=>setColor(k)}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:c.hex,display:"block",boxShadow:"0 0 0 2px #fff"}}), c.name))),
+      h("button",{class:"btn soft block",onclick:()=>{ st.bestManual[it.color]=i; autoBest(st); m.close(); draw(); }},"★ Make this the best "+(cur.name||"")),
+      h("button",{class:"btn ghost block",onclick:()=>{ st.items.splice(i,1); st.bestManual={}; autoBest(st); m.close(); draw(); }},"Remove from book")));
+  };
+  const makeBook=async()=>{
+    if (!(await requireAuth("Save your book"))) return;
+    const groups=st.colors.map((c,k)=>({c,its:st.items.map((it,i)=>({it,i})).filter(x=>x.it.color===k)})).filter(g=>g.its.length);
+    const total=groups.reduce((a,g)=>a+g.its.length,0);
+    const pr=progressOverlay("Making your book…"); let done=0;
+    try{
+      const palette=groups.map(g=>({name:g.c.name,hex:g.c.hex}));
+      const code=await createHunt({ title:st.title.trim(), place:st.place.trim(), occasion:"", date:st.date, tagline:"", note:"", palette, mode:"order", unique:true, allowCustom:false, maxPhotos:AUTO_MAX, auto:true, author:st.name.trim() });
+      for (let gi=0; gi<groups.length; gi++){
+        const g=groups[gi], hid=rid();
+        const me={id:hid};
+        const hunter={ name:st.name.trim()||"Me", color:{name:g.c.name,hex:g.c.hex}, selfie:null, uid:S.uid, joinedAt:Date.now()+gi, best:null };
+        await tryWrite(()=>S.db.doc(`hunts/${code}/hunters/${hid}`).set(hunter));
+        const mine=LS.get("mine."+code,[]); mine.push(hid); LS.set("mine."+code,mine);
+        let bestPid=null;
+        for (const {it,i} of g.its){
+          pr.set(done/total, `Saving photo ${done+1} of ${total} — keep this screen open`);
+          const c=await fileToCanvas(it.file); const pid=rid();
+          await savePhoto(me,{canvas:c,meta:it.meta},{code,pid,createdAt:Date.now()+done});
+          if (st.best[it.color]===i) bestPid=pid;
+          done++;
+        }
+        if (bestPid) await tryWrite(()=>S.db.doc(`hunts/${code}/hunters/${hid}`).update({best:bestPid}));
+      }
+      pr.done(); S.auto=null; toast("Your book is ready!"); go("h"+code+"-book");
+    }catch(e){ pr.done(); toast(errMsg(e),6000); }
+  };
+  draw();
+  return root;
 }
 
 /* ==================== LIBRARY ==================== */
@@ -690,7 +947,7 @@ const NAV_ICONS={
 function renderNav(){
   let nav=$("#bnav");
   const v=S.route.v;
-  if (!S.ready || !S.db || v==="create"){ if(nav) nav.remove(); document.body.classList.remove("hasnav"); return; }
+  if (!S.ready || !S.db || v==="create" || v==="auto"){ if(nav) nav.remove(); document.body.classList.remove("hasnav"); return; }
   if (!nav){ nav=h("nav",{id:"bnav","aria-label":"Main menu"}); document.body.append(nav); }
   document.body.classList.add("hasnav");
   const item=(key,label,icon,on,fn,cls)=>{ const b=h("button",{class:"nb"+(on?" on":"")+(cls?" "+cls:""),onclick:fn,"aria-label":label}); const ic=h("span",{class:"ni"}); ic.innerHTML=NAV_ICONS[icon]; b.append(ic,h("span",null,label)); return b; };
@@ -740,6 +997,7 @@ function viewCreate(){
         field("Book tagline", tagline, "Under the title on the cover.", true),
         field("Note for the book", note, "A fun line on the Meet the Color Hunters page.", true));
       body = h("div",{class:"card stack"},
+        h("button",{type:"button",class:"autohint",onclick:()=>{ go("auto"); }}, "✨ Already have photos? Try Auto-Hunt ›"),
         field("Hunt name", title),
         field("Where", place, null, true),
         h("div",null, field("Occasion", occ, null, true), h("div",{style:"margin-top:8px"},occChips)),
@@ -851,10 +1109,11 @@ function viewHunt(){
   if (mine.length>1 || (me && !closed && !S.readOnly)){
     sections.push(h("div",{class:"chips"},
       mine.map(x=>h("button",{class:"chip"+(me&&x.id===me.id?" on":""),onclick:()=>{LS.set("active."+code,x.id);renderView();}}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:x.color.hex,display:"block",boxShadow:"0 0 0 2px #fff"}}), x.name)),
-      (!closed && !S.readOnly && me) ? h("button",{class:"chip",onclick:async()=>{ if(await requireAuth("Add a hunter")) openJoin(); }},"+ Add a hunter") : null));
+      (!closed && !S.readOnly && me && !S.hunt.auto) ? h("button",{class:"chip",onclick:async()=>{ if(await requireAuth("Add a hunter")) openJoin(); }},"+ Add a hunter") : null));
   }
 
   if (me) sections.push(myPanel(me, hunt, closed));
+  else if (hunt.auto) sections.push(h("div",{class:"notice"},`An Auto-Hunt book by ${hunt.author||"a Color Hunter"}.`));
   else if (!closed && !S.readOnly) sections.push(h("div",{class:"card stack",style:"text-align:center;padding:28px 20px"},
     h("div",{class:"hero-swatches",style:"margin:0 0 6px"}, (hunt.palette||[]).slice(0,7).map((c,i)=>h("i",{style:{background:c.hex,height:"46px","--rot":((i%2?1:-1)*(2+i%3))+"deg"}}))),
     h("h3",null,"Ready to hunt?"),
@@ -907,7 +1166,7 @@ function myPanel(me, hunt, closed){
   const card = h("div",{class:"colorcard",style:{background:me.color.hex,color:fg}},
     h("div",{class:"row",style:"align-items:flex-start;gap:16px"},
       h("div",{style:"flex:1;min-width:0"},
-        h("div",{class:"eyebrow",style:{color:fg,opacity:.75}},`${me.name} is hunting for`),
+        h("div",{class:"eyebrow",style:{color:fg,opacity:.75}}, hunt.auto ? `Auto-Hunt color` : `${me.name} is hunting for`),
         h("div",{class:"big",style:"margin:8px 0 6px"}, me.color.name),
         h("div",{style:"font-size:13px;opacity:.7;letter-spacing:.08em"}, me.color.hex.toUpperCase())),
       h("button",{class:"framed selfie-sm",style:{borderColor:fg==="#FFFFFF"?"#fff":INK,backgroundImage:me.selfie?`url("${me.selfie}")`:"none",background:me.selfie?undefined:rgba(fg,.15),color:fg},onclick:()=>openEditMe(me),"aria-label":"Edit your profile"}, me.selfie?"":"📷")),
@@ -1182,10 +1441,10 @@ function queueSave(me, out){
   S.pending++; renderUploadPill();
   S.saveChain = S.saveChain.then(()=>savePhoto(me, out)).catch(e=>{ toast(errMsg(e),5000); }).finally(()=>{ S.pending--; renderUploadPill(); });
 }
-async function savePhoto(me, out){
-  const code=S.code, pid=rid();
+async function savePhoto(me, out, opt={}){
+  const code=opt.code||S.code, pid=opt.pid||rid();
   const c = out.canvas;
-  const doc = { hunter:me.id, w:c.width, h:c.height, t:toThumb(c,400,.62), createdAt:Date.now(), uid:S.uid };
+  const doc = { hunter:me.id, w:c.width, h:c.height, t:toThumb(c,400,.62), createdAt:opt.createdAt||Date.now(), uid:S.uid };
   const meta = out.meta || {};
   if (meta.takenAt) doc.takenAt = meta.takenAt;
   if (meta.lat!=null){ doc.lat=meta.lat; doc.lng=meta.lng; const pn=await placeName(meta.lat,meta.lng); if(pn) doc.place=pn; }
@@ -1464,7 +1723,7 @@ function buildBook(){
     pages.push({kind:"cover",label:"Cover",els,bg:DARK});
   }
   // ---- meet the hunters
-  for (let ci=0; ci<Math.max(1,Math.ceil(H.length/12)); ci++){
+  for (let ci=0; ci<(hunt.auto?0:Math.max(1,Math.ceil(H.length/12))); ci++){
     const grp=H.slice(ci*12,ci*12+12); const els=[];
     els.push(eyebrow(ci?"Meet more of the":"Meet the",500,92,{s:16,ls:.4,c:MUTED}));
     els.push(T("Color Hunters",500,160,{f:"serif",s:76,w:860}));
@@ -1483,13 +1742,13 @@ function buildBook(){
     els.push(eyebrow("Hunted by",500,842,{s:14,ls:.36,c:SOFT}));
     els.push(T(x.name,500,898,{f:"serif",s:44,c:CREAM,w:860}));
     const tp=topPlace(ps); if (tp) els.push(eyebrow(tp,500,948,{s:13,ls:.3,c:SOFT,w:860}));
-    pages.push({kind:"chapter",label:`${x.color.name} — ${x.name}`,els,bg:DARK});
+    pages.push({kind:"chapter",label:`${x.color.name} — ${x.name}`,els,bg:DARK,hid:x.id});
     const rest=ps.slice(1); let prev=null, idx=0;
     chunkSizes(rest.length).forEach(n=>{
       const slice=rest.slice(idx,idx+n); idx+=n;
       const L=layoutPhotos(slice,{x:70,y:70,w:860,h:860},prev,18); prev=L.key;
       const pe=L.items.map(it=>({t:"img",...it.r,pid:it.p.id,r:10,ph:mix(col,"#fff",.6)}));
-      pages.push({kind:"photos",label:`${x.color.name} — ${x.name}`,els:pe,bg:CREAM_BG});
+      pages.push({kind:"photos",label:`${x.color.name} — ${x.name}`,els:pe,bg:CREAM_BG,hid:x.id});
     });
     if (ps.length>=2){
       const els2=[]; const n=ps.length;
@@ -1499,7 +1758,7 @@ function buildBook(){
       const gh=rows*(cell+g)-g; const top=210+(720-gh)/2;
       ps.forEach((p,i)=>{ const r=Math.floor(i/cols), inRow=Math.min(cols,n-r*cols), c=i-r*cols; const rw=inRow*(cell+g)-g;
         els2.push({t:"img",x:500-rw/2+c*(cell+g),y:top+r*(cell+g),w:cell,h:cell,pid:p.id,r:6,ph:mix(col,"#fff",.6)}); });
-      pages.push({kind:"allfinds",label:`All ${x.color.name} finds`,els:els2,bg:CREAM_BG});
+      pages.push({kind:"allfinds",label:`All ${x.color.name} finds`,els:els2,bg:CREAM_BG,hid:x.id});
     }
   });
   // ---- best finds
@@ -1508,7 +1767,7 @@ function buildBook(){
     els.push(eyebrow("The grand finale",500,92,{s:16,ls:.4,c:MUTED}));
     els.push(T("The Best Finds",500,160,{f:"serif",s:76,w:860}));
     if (!bests.length) els.push(T("Each hunter's best photo will land here.",500,520,{s:24,c:MUTED}));
-    else cardGrid(els, bests.map(({x,p})=>({color:x.color.hex,pid:p.id,name:x.name,sub:x.color.name})), {x:60,y:225,w:880,h:715}, {aspect:bests.length<=2?.8:.9,labelFrac:.26,maxCols:4,maxW:420});
+    else cardGrid(els, bests.map(({x,p})=>({color:x.color.hex,pid:p.id,name:hunt.auto?x.color.name:x.name,sub:hunt.auto?`${S.photos.filter(q=>q.hunter===x.id).length} finds`:x.color.name})), {x:60,y:225,w:880,h:715}, {aspect:bests.length<=2?.8:.9,labelFrac:.26,maxCols:4,maxW:420});
     pages.push({kind:"best",label:"The best finds",els,bg:CREAM_BG});
   }
   // ---- spotlight
@@ -1619,6 +1878,7 @@ function viewBook(){
         ex("📖","Digital book PDF","Smaller file for texting & email",()=>exportPDF("digital")),
         ex("📱","Social posts","1080 × 1080 JPGs in a .zip — carousel-ready",()=>exportSocial())),
       h("p",{class:"hint"},"Instagram carousels hold up to 20 slides. Tap ", h("b",null,"Save")," under any page to save just that one.")),
+    h("div",{id:"bookfilter",style:"margin-top:20px"}),
     pagesEl);
   setTimeout(updateBook,0);
   return root;
@@ -1643,6 +1903,17 @@ function updateBook(){
     fig._img=img; fig._ld=ld; return fig;
   });
   S.bookEl.replaceChildren(...shells);
+  const applyFilter=()=>{ const f=S.bookFilter; shells.forEach((sh,i)=>{ sh.style.display = (!f || S.pages[i].hid===f) ? "" : "none"; }); };
+  const fb=$("#bookfilter");
+  if (fb){
+    const H=sortedHunters(); if (S.bookFilter && !H.some(x=>x.id===S.bookFilter)) S.bookFilter=null;
+    const drawChips=()=>fb.replaceChildren(h("div",{class:"eyebrow",style:"margin-bottom:8px"},"View"), h("div",{class:"chips"},
+      h("button",{class:"chip"+(!S.bookFilter?" on":""),onclick:()=>{ S.bookFilter=null; drawChips(); applyFilter(); }},"Whole book"),
+      H.map(x=>h("button",{class:"chip"+(S.bookFilter===x.id?" on":""),onclick:()=>{ S.bookFilter=x.id; drawChips(); applyFilter(); window.scrollTo({top:fb.getBoundingClientRect().top+scrollY-10,behavior:"smooth"}); }},
+        h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:x.color.hex,display:"block",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.15)"}}), S.hunt.auto ? x.color.name : `${x.color.name} · ${x.name}`))));
+    drawChips();
+  }
+  applyFilter();
   const pump = async()=>{
     if (busy) return; busy=true;
     while(queue.length){ if(gen!==viewerGen) break; const i=queue.shift(); const fig=shells[i];
