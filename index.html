@@ -670,11 +670,11 @@ function viewHome(){
 
       h("p",{class:"muted",style:"font-size:17px;margin-top:10px"},"Everyone gets a color. Everyone snaps what they find. Color Hunt lays it all out as a photo book you can print or post.")),
     h("div",{class:"card stack"},
-      h("div",{class:"eyebrow"},"Join a hunt"),
+      h("div",{class:"eyebrow"},"Join color hunt"),
       codeIn,
       h("button",{class:"btn block",onclick:join},"Join with code")),
     h("div",{class:"card stack",style:"background:var(--ink);color:#fff;border-color:var(--ink)"},
-      h("h3",null,"Start a new hunt"),
+      h("h3",null,"New color hunt"),
       h("p",{style:"opacity:.75"},"Pick your colors, choose how they're handed out, and share a 4-digit code with your group."),
       h("button",{class:"btn block",style:"background:#fff;color:var(--ink);border-color:#fff",onclick:()=>go("create")},"Create a hunt")),
     h("div",{class:"card stack autocard"},
