@@ -652,7 +652,8 @@ function siteFooter(){
 }
 
 /* ==================== AUTO-HUNT ==================== */
-const AUTO_MAX = 60;
+const AUTO_MAX = 100;
+const AUTO_MAX_COLORS = 10;
 function rgb2lab(r,g,b){
   const lin=v=>{ v/=255; return v>0.04045?Math.pow((v+0.055)/1.055,2.4):v/12.92; };
   r=lin(r); g=lin(g); b=lin(b);
@@ -701,12 +702,21 @@ function votes(px, colors){
   for (let k=0;k<v.length;k++) v[k]/=(tot||1);
   return v;
 }
-function suggestColors(items, n){
-  const cands=autoCandidates(); const score=new Float32Array(cands.length);
+function autoPool(st){
+  if (st.palette && st.palette!=="photos"){
+    const p=PALETTES.find(x=>x.id===st.palette); const base=p?p.colors:[];
+    const bw=st.bw?BW.filter(b=>!base.some(c=>c[0].toLowerCase()===b[0].toLowerCase()||c[1].toUpperCase()===b[1])):[];
+    return [...base,...bw,...(st.custom||[])].map(([name,hex])=>prepColor({name,hex:hex.toUpperCase()}));
+  }
+  const core=autoCandidates().filter(c=>st.bw || !["Black","White"].includes(c.name));
+  return [...core, ...(st.custom||[]).map(([name,hex])=>prepColor({name,hex:hex.toUpperCase()}))];
+}
+function suggestColors(items, n, pool){
+  const cands=pool||autoCandidates(); const score=new Float32Array(cands.length);
   items.forEach(it=>{ const v=votes(it.px,cands); v.forEach((x,k)=>score[k]+=x*x); });
   const order=cands.map((c,k)=>({c,s:score[k]})).sort((a,b)=>b.s-a.s);
   const out=[];
-  for (const o of order){ if (out.some(c=>colorDist(c.hex,o.c.hex)<70)) continue; out.push(o.c); if(out.length>=n) break; }
+  for (const o of order){ if (out.some(c=>colorDist(c.hex,o.c.hex)<(pool&&pool.length<=12?20:70))) continue; out.push(o.c); if(out.length>=n) break; }
   return out.map(c=>({name:c.name,hex:c.hex}));
 }
 function sortPhotos(items, colors){
@@ -755,7 +765,7 @@ async function renderAutoPreview(st, container){
 }
 function viewAuto(){
   if (!S.db) return noDbView();
-  if (!S.auto) S.auto = { step:1, title:"", place:"", date:new Date().toLocaleString("en-US",{month:"long",year:"numeric"}), name:accountName(), items:[], n:6, colors:[], busy:false, bestManual:{} };
+  if (!S.auto) S.auto = { step:1, title:"", place:"", date:new Date().toLocaleString("en-US",{month:"long",year:"numeric"}), name:accountName(), items:[], n:6, colors:[], busy:false, bestManual:{}, palette:"photos", bw:true, custom:[] };
   const st=S.auto, root=h("div",{class:"wrap stack-lg"});
   const STEPS=["Add your photos","Choose colors","Check the sort"];
   const fileIn=h("input",{type:"file",accept:"image/*",multiple:true,class:"sr",onchange:()=>{ const f=[...fileIn.files]; fileIn.value=""; addFiles(f); }});
@@ -789,26 +799,41 @@ function viewAuto(){
           st.items.length<AUTO_MAX ? h("button",{class:"btn lg block"+(st.items.length?" soft":""),disabled:st.busy,onclick:()=>fileIn.click()}, st.items.length?"+ Add more photos":"Choose photos") : null,
           fileIn));
       next=()=>{ if(!st.title.trim()){ toast("Give your book a title"); return; } if(st.items.length<3){ toast("Add at least 3 photos"); return; } if(!st.name.trim()) st.name=accountName()||"Me";
-        if(!st.colors.length){ st.n=Math.min(st.n, st.items.length); st.colors=suggestColors(st.items, st.n); resort(); } st.step=2; draw(); window.scrollTo(0,0); };
+        if(!st.colors.length){ st.n=Math.min(st.n, st.items.length); st.colors=suggestColors(st.items, st.n, autoPool(st)); resort(); } st.step=2; draw(); window.scrollTo(0,0); };
     } else if (st.step===2){
       const counts=st.colors.map((_,k)=>st.items.filter(it=>it.color===k).length);
-      const setN=n=>{ n=Math.max(2,Math.min(12,n,st.items.length)); if(n===st.n) return; st.n=n; st.colors=suggestColors(st.items,n); resort(); draw(); };
-      const others=autoCandidates(true).filter(c=>!st.colors.some(x=>x.name===c.name||colorDist(x.hex,c.hex)<40));
+      const pool=autoPool(st);
+      const maxN=Math.min(AUTO_MAX_COLORS, st.items.length, st.palette==="photos"?AUTO_MAX_COLORS:pool.length);
+      const refresh=()=>{ st.colors=suggestColors(st.items, st.n, autoPool(st)); st.n=st.colors.length; resort(); draw(); };
+      const setN=n=>{ n=Math.max(2,Math.min(maxN,n)); if(n===st.n) return; st.n=n; refresh(); };
+      const choosePalette=id=>{ st.palette=id; const pl=autoPool(st).length; st.n=Math.max(2,Math.min(AUTO_MAX_COLORS, st.items.length, id==="photos"?st.n:pl)); refresh(); };
+      const bwIn=h("input",{type:"checkbox",checked:st.bw,onchange:()=>{ st.bw=bwIn.checked; if(!st.bw) st.colors=st.colors.filter(c=>!["Black","White"].includes(c.name)); if(st.palette!=="photos"){ st.n=Math.max(2,Math.min(AUTO_MAX_COLORS,st.items.length,autoPool(st).length)); } refresh(); }});
+      const others=[...pool, ...autoCandidates(true)].filter((c,i,a)=>a.findIndex(x=>x.name===c.name)===i).filter(c=>!st.colors.some(x=>x.name===c.name||colorDist(x.hex,c.hex)<25)).filter(c=>st.bw||!["Black","White"].includes(c.name));
+      const addName=h("input",{placeholder:"Name a new color",maxlength:"20"}), addHex=h("input",{type:"color",value:"#1FB5AC"});
+      const addCustom=()=>{ const name=addName.value.trim(), hex=addHex.value.toUpperCase(); if(!name){ toast("Give your color a name"); addName.focus(); return; } if(st.colors.length>=AUTO_MAX_COLORS){ toast(`Up to ${AUTO_MAX_COLORS} colors`); return; } if(st.colors.some(c=>c.hex===hex||c.name.toLowerCase()===name.toLowerCase())){ toast("That color is already in the list"); return; } st.custom.push([name,hex]); st.colors.push({name,hex}); st.n=st.colors.length; resort(); draw(); };
       body=h("div",{class:"stack-lg"},
+        h("div",{class:"card stack"},
+          h("div",{class:"eyebrow"},"Colors from"),
+          h("div",{class:"chips"},
+            h("button",{class:"chip"+(st.palette==="photos"?" on":""),onclick:()=>choosePalette("photos")},"✨ My photos"),
+            PALETTES.map(p=>h("button",{class:"chip"+(st.palette===p.id?" on":""),onclick:()=>choosePalette(p.id)},
+              h("span",{style:"display:inline-flex;gap:2px"}, p.colors.slice(0,4).map(c=>h("i",{style:{width:"9px",height:"9px",borderRadius:"50%",background:c[1],display:"block",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.1)"}}))), p.name))),
+          h("label",{class:"toggle",style:"padding:4px 0"}, h("div",{class:"row",style:"gap:10px"}, h("span",{style:"display:inline-flex"},h("i",{style:{width:"22px",height:"22px",borderRadius:"6px",background:"#1A1A1A",display:"block"}}),h("i",{style:{width:"22px",height:"22px",borderRadius:"6px",background:"#F4F4F2",display:"block",marginLeft:"-6px",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.15)"}})), h("b",{style:"font-size:15px"},"Include black and white")), h("span",{class:"switch"},bwIn,h("i")))),
         h("div",{class:"card stack",style:"text-align:center"},
           h("h3",null,"How many colors?"),
           h("div",{class:"row",style:"justify-content:center;gap:18px"},
-            h("button",{class:"iconbtn",style:"width:56px;height:56px;font-size:26px","aria-label":"Fewer colors",onclick:()=>setN(st.n-1)},"−"),
+            h("button",{class:"iconbtn",style:"width:56px;height:56px;font-size:26px","aria-label":"Fewer colors",disabled:st.n<=2,onclick:()=>setN(st.n-1)},"−"),
             h("div",{style:"font-size:48px;font-weight:800;min-width:70px"},String(st.n)),
-            h("button",{class:"iconbtn",style:"width:56px;height:56px;font-size:26px","aria-label":"More colors",onclick:()=>setN(st.n+1)},"+")),
-          h("p",{class:"muted small"},"We picked the colors that show up most in your photos.")),
+            h("button",{class:"iconbtn",style:"width:56px;height:56px;font-size:26px","aria-label":"More colors",disabled:st.n>=maxN,onclick:()=>setN(st.n+1)},"+")),
+          h("p",{class:"muted small"}, st.palette==="photos" ? `Up to ${AUTO_MAX_COLORS}. We picked the colors that show up most in your photos.` : `Up to ${Math.min(AUTO_MAX_COLORS,pool.length)}. We picked the palette colors that match your photos best.`)),
         h("div",{class:"card stack"},
           h("div",{class:"eyebrow"},"Your colors"),
           h("div",{class:"swatch-grid"}, st.colors.map((c,k)=>h("div",{class:"swatch on",style:"cursor:default"},
             h("span",{class:"sw",style:{background:c.hex}}), h("span",{class:"nm"},c.name), h("span",{class:"sub"},`${counts[k]} photo${counts[k]===1?"":"s"}`),
             st.colors.length>2 ? h("button",{class:"swx","aria-label":"Remove "+c.name,onclick:()=>{ st.colors.splice(k,1); st.n=st.colors.length; resort(); draw(); }},"✕") : null))),
-          h("div",{class:"eyebrow",style:"margin-top:6px"},"Swap in a different color"),
-          h("div",{class:"chips",style:"flex-wrap:wrap"}, others.map(c=>h("button",{class:"chip",onclick:()=>{ if(st.colors.length>=12){ toast("Up to 12 colors"); return; } st.colors.push({name:c.name,hex:c.hex}); st.n=st.colors.length; resort(); draw(); }}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:c.hex,display:"block",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.15)"}}), c.name)))));
+          h("div",{class:"eyebrow",style:"margin-top:6px"},"Add or swap in a color"),
+          h("div",{class:"chips",style:"flex-wrap:wrap"}, others.map(c=>h("button",{class:"chip",onclick:()=>{ if(st.colors.length>=AUTO_MAX_COLORS){ toast(`Up to ${AUTO_MAX_COLORS} colors — remove one first`); return; } st.colors.push({name:c.name,hex:c.hex}); st.n=st.colors.length; resort(); draw(); }}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:c.hex,display:"block",boxShadow:"inset 0 0 0 1px rgba(0,0,0,.15)"}}), c.name))),
+          h("div",{class:"row"}, addHex, addName, h("button",{class:"btn soft sm",type:"button",onclick:addCustom},"Add"))));
       next=()=>{ st.step=3; draw(); window.scrollTo(0,0); };
     } else {
       const counts=st.colors.map((_,k)=>st.items.filter(it=>it.color===k).length);
@@ -846,7 +871,7 @@ function viewAuto(){
       found.length ? h("div",{class:"stack"}, h("div",{class:"eyebrow"},"Colors we see in this photo"),
         found.map(f=>h("button",{class:"foundrow"+(f.inSet===it.color?" on":""),onclick:()=>{
             if (f.inSet>=0) setColor(f.inSet);
-            else { if(st.colors.length>=12){ toast("Up to 12 colors"); return; } st.colors.push({name:f.name,hex:f.hex}); st.n=st.colors.length; setColor(st.colors.length-1); }
+            else { if(st.colors.length>=AUTO_MAX_COLORS){ toast(`Up to ${AUTO_MAX_COLORS} colors`); return; } st.colors.push({name:f.name,hex:f.hex}); st.n=st.colors.length; setColor(st.colors.length-1); }
           }},
           h("i",{class:"fsw",style:{background:f.hex}}),
           h("div",{style:"flex:1;text-align:left"}, h("b",null,f.name), h("div",{class:"fbar"},h("i",{style:{width:Math.max(8,Math.round(f.strength*100))+"%",background:f.hex}}))),
@@ -1753,7 +1778,7 @@ function buildBook(){
     if (ps.length>=2){
       const els2=[]; const n=ps.length;
       els2.push(eyebrow(`All ${n} ${x.color.name} finds`,500,140,{s:16,ls:.32,c:INK,w:860}));
-      const cols=n<=2?n:n<=4?2:n<=9?3:n<=16?4:5; const rows=Math.ceil(n/cols); const g=12;
+      const cols=n<=2?n:n<=4?2:n<=9?3:n<=16?4:n<=30?5:n<=42?6:7; const rows=Math.ceil(n/cols); const g=n>30?8:12;
       const cell=Math.min((860+g)/cols-g,(680+g)/rows-g,n<=4?380:270);
       const gh=rows*(cell+g)-g; const top=210+(720-gh)/2;
       ps.forEach((p,i)=>{ const r=Math.floor(i/cols), inRow=Math.min(cols,n-r*cols), c=i-r*cols; const rw=inRow*(cell+g)-g;
