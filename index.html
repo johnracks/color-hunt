@@ -208,6 +208,11 @@ body.hasnav #toasts{bottom:calc(86px + env(safe-area-inset-bottom))}
 .dsub{display:block;font-size:12px;color:var(--muted);font-weight:400}
 .dsec{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:16px 10px 6px}
 .dacct{display:flex;gap:10px;align-items:center;padding:10px;border-radius:14px;background:#F6F2EA;margin-bottom:8px}
+.lobby{border:2px solid var(--ink)}
+.lobbyppl{display:flex;flex-wrap:wrap;gap:12px}
+.lobbyp{display:flex;flex-direction:column;align-items:center;gap:4px;width:64px;font-size:12px;font-weight:600;text-align:center}
+.lobbyp span{max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.golive{background:linear-gradient(90deg,#E23B3B,#F57C1F,#F6C324,#2E9E5B,#2D6FD8,#7D3CC8);border:0;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.3)}
 /* modals */
 #modals .ov{position:fixed;inset:0;background:rgba(20,17,13,.55);display:flex;align-items:flex-end;justify-content:center;z-index:50;animation:fade .2s}
 .sheet{background:var(--card);width:100%;max-width:560px;max-height:94vh;overflow:auto;border-radius:24px 24px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom));animation:up .28s cubic-bezier(.2,.9,.3,1);position:relative}
@@ -584,7 +589,8 @@ function photosOf(hu){
   if (hu.best){ const i=ps.findIndex(p=>p.id===hu.best); if(i>0){ const [b]=ps.splice(i,1); ps.unshift(b); } }
   return ps;
 }
-function myHunters(){ const local = LS.get("mine."+S.code, []); return sortedHunters().filter(x=>x.uid===S.uid || local.includes(x.id)); }
+function myHunters(){ const local = LS.get("mine."+S.code, []); const waiting=S.hunters.filter(x=>!x.color).sort((a,b)=>(a.joinedAt||0)-(b.joinedAt||0)); return [...sortedHunters(), ...waiting].filter(x=>x.uid===S.uid || local.includes(x.id)); }
+function isLobby(h){ return h && h.mode==="lobby" && !h.started; }
 function rememberHunt(hunt){
   const list = LS.get("recent", []).filter(x=>x.code!==hunt.code);
   list.unshift({code:hunt.code, title:hunt.title, at:Date.now()}); LS.set("recent", list.slice(0,12));
@@ -1381,7 +1387,7 @@ function viewCreate(){
         swatchBox,
         h("div",{class:"row"}, addHex, addName, h("button",{class:"btn soft sm",type:"button",onclick:addCustom},"Add")));
     } else {
-      const modes=[["choose","🎨","Hunters pick","Everyone chooses their own color."],["random","🎲","Surprise me","Colors are handed out at random."],["order","➡️","In order","Colors go out in order as people join."]];
+      const modes=[["choose","🎨","Hunters pick","Everyone chooses their own color."],["random","🎲","Surprise me","Colors are handed out at random."],["order","➡️","In order","Colors go out in order as people join."],["lobby","🚦","Reveal together","Everyone joins first. When you tap Go, colors are handed out at random — all at once."]];
       const modeBox=h("div",{class:"mode-cards"});
       const drawModes=()=>modeBox.replaceChildren(modes.map(([id,ic,t,d])=>h("button",{type:"button",class:"mode-card"+(st.mode===id?" on":""),onclick:()=>{st.mode=id;drawModes();}},h("span",{class:"ic"},ic),h("div",null,h("b",null,t),h("span",null,d)))));
       drawModes();
@@ -1466,16 +1472,19 @@ function viewHunt(){
   // switcher for multiple hunters on this device
   if (mine.length>1 || (me && !closed && !S.readOnly)){
     sections.push(h("div",{class:"chips"},
-      mine.map(x=>h("button",{class:"chip"+(me&&x.id===me.id?" on":""),onclick:()=>{LS.set("active."+code,x.id);renderView();}}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:x.color.hex,display:"block",boxShadow:"0 0 0 2px #fff"}}), x.name)),
+      mine.map(x=>h("button",{class:"chip"+(me&&x.id===me.id?" on":""),onclick:()=>{LS.set("active."+code,x.id);renderView();}}, h("i",{style:{width:"12px",height:"12px",borderRadius:"50%",background:x.color?x.color.hex:"#D8D0C2",display:"block",boxShadow:"0 0 0 2px #fff"}}), x.name)),
       (!closed && !S.readOnly && me && !S.hunt.auto) ? h("button",{class:"chip",onclick:async()=>{ if(await requireAuth("Add a hunter")) openJoin(); }},"+ Add a hunter") : null));
   }
 
-  if (me) sections.push(myPanel(me, hunt, closed));
+  const waiting = S.hunters.filter(x=>!x.color);
+  if (hunt.mode==="lobby" && !hunt.started) sections.push(lobbyCard(hunt, waiting, me, isOrganizer, closed));
+  if (me && !me.color){ /* waiting — shown in lobby card */ }
+  else if (me){ sections.push(myPanel(me, hunt, closed)); if (hunt.mode==="lobby" && !LS.get("revealed."+me.id,false)){ LS.set("revealed."+me.id,true); setTimeout(()=>revealColor(me, hunt),60); } }
   else if (hunt.auto) sections.push(h("div",{class:"notice"},`An Auto-Hunt book by ${hunt.author||"a Color Hunter"}.`));
   else if (!closed && !S.readOnly) sections.push(h("div",{class:"card stack",style:"text-align:center;padding:28px 20px"},
     h("div",{class:"hero-swatches",style:"margin:0 0 6px"}, (hunt.palette||[]).slice(0,7).map((c,i)=>h("i",{style:{background:c.hex,height:"46px","--rot":((i%2?1:-1)*(2+i%3))+"deg"}}))),
     h("h3",null,"Ready to color hunt?"),
-    h("p",{class:"muted"}, hunt.mode==="choose" ? "Join with your name and pick a color." : hunt.mode==="random" ? "Join with your name — your color will be a surprise." : "Join with your name and get the next color in line."),
+    h("p",{class:"muted"}, hunt.mode==="choose" ? "Join with your name and pick a color." : isLobby(hunt) ? "Join the waiting room. Colors are revealed for everyone at once when the organizer taps Go." : (hunt.mode==="random"||hunt.mode==="lobby") ? "Join with your name — your color will be a surprise." : "Join with your name and get the next color in line."),
     h("button",{class:"btn lg block",onclick:async()=>{ if(await requireAuth("Join the color hunt")) openJoin(); }}, (AUTH&&!S.account)?"Sign in to join":"Join the color hunt")));
   else if (closed) sections.push(h("div",{class:"notice"},"This color hunt is closed to new hunters and uploads. The book is ready to view."));
 
@@ -1497,7 +1506,7 @@ function viewHunt(){
           h("div",{class:"row"}, h("b",null,x.name), h("span",{class:"muted small"},x.color.name), x.best?h("span",{title:"Best photo chosen",style:"font-size:13px"},"★"):null),
           h("div",{class:"progress",style:"margin-top:7px"}, h("i",{style:{width:Math.min(100,n/max*100)+"%",background:x.color.hex}}))),
         h("span",{class:"muted small",style:"min-width:42px;text-align:right"}, `${n}/${max}`));
-    }) : h("p",{class:"muted",style:"padding:10px 0"},"No one has joined yet. Share the code to get started.")));
+    }) : h("p",{class:"muted",style:"padding:10px 0"}, isLobby(hunt) && S.hunters.length ? "Hunters and their colors show up here after Go." : "No one has joined yet. Share the code to get started.")));
 
   const suggested = (isOrganizer && !hunt.place && !LS.get("noplace."+code,false)) ? topPlace(S.photos) : null;
   if (suggested) sections.splice(1,0,h("div",{class:"banner",style:"background:#EEF4FF;border-color:#C9DAF8"}, h("span",{style:"font-size:22px"},"📍"),
@@ -1601,12 +1610,23 @@ function openJoin(){
           st.color && !pal.find(c=>c.hex===st.color.hex) ? h("p",{class:"small"},"Selected: ",h("b",null,st.color.name)) : null,
           h("div",{class:"row"}, h("button",{class:"btn ghost block",onclick:()=>{st.step=2;draw();}},"Back"),
             h("button",{class:"btn block",disabled:!st.color,onclick:()=>finish()},"Join color hunt")));
+      } else if (isLobby(S.hunt)){
+        body.replaceChildren(stepper(3), h("h2",null,"Join the waiting room"),
+          h("p",{class:"muted"},"Colors are handed out at random once everyone's here and the organizer taps Go. Keep this page open to see your color appear!"),
+          h("div",{class:"hero-swatches",style:"margin:18px 0"}, pal.map((c,i)=>h("i",{style:{background:c.hex,height:"54px","--rot":((i%2?1:-1)*(2+i%3))+"deg"}}))),
+          h("div",{class:"row"}, h("button",{class:"btn ghost block",onclick:()=>{st.step=2;draw();}},"Back"), h("button",{class:"btn block lg",onclick:()=>finish()},"I'm in!")));
       } else {
-        body.replaceChildren(stepper(3), h("h2",null, hunt.mode==="random"?"Your color is a surprise":"Your color is next in line"),
+        body.replaceChildren(stepper(3), h("h2",null, (hunt.mode==="random"||hunt.mode==="lobby")?"Your color is a surprise":"Your color is next in line"),
           h("p",{class:"muted"}, (hunt.unique && pal.every(c=>counts[c.hex.toLowerCase()])) ? "Every color is taken, so you'll get a brand-new one. Tap to see it!" : "Tap below to find out what you're hunting for."),
           h("div",{class:"hero-swatches",style:"margin:18px 0"}, pal.map((c,i)=>h("i",{style:{background:c.hex,height:"54px","--rot":((i%2?1:-1)*(2+i%3))+"deg",opacity:(hunt.unique&&counts[c.hex.toLowerCase()])?.25:1}}))),
           h("div",{class:"row"}, h("button",{class:"btn ghost block",onclick:()=>{st.step=2;draw();}},"Back"), h("button",{class:"btn block lg",onclick:()=>finish()},"Reveal my color")));
       }
+    } else if (st.step===5){
+      body.replaceChildren(h("div",{class:"reveal"},
+        h("div",{style:"font-size:56px"},"🚦"),
+        h("h2",null,`You're in, ${st.name}!`),
+        h("p",{class:"muted",style:"margin:12px 0 22px"},"Waiting for the organizer to tap Go. Your color will pop up right here."),
+        h("button",{class:"btn block lg",onclick:()=>m.close()},"OK")));
     } else if (st.step===4){
       const c = st.color;
       body.replaceChildren(h("div",{class:"reveal"},
@@ -1621,6 +1641,8 @@ function openJoin(){
     const btns = body.querySelectorAll("button"); btns.forEach(b=>b.disabled=true);
     try{
       const hunter = await joinHunt(code, st);
+      if (!hunter.color){ st.step=5; draw(); return; }
+      LS.set("revealed."+hunter.id, true);
       st.color = hunter.color; st.step=4; draw();
     }catch(e){ toast(errMsg(e),5000); btns.forEach(b=>b.disabled=false); }
   };
@@ -1639,12 +1661,22 @@ async function joinHunt(code, st){
   const allUsed = pal.length>0 && pal.every(c=>counts[c.hex.toLowerCase()]);
   const least = ()=>{ const min = Math.min(...pal.map(c=>counts[c.hex.toLowerCase()]||0)); return pal.filter(c=>(counts[c.hex.toLowerCase()]||0)===min); };
   let color = st.color;
+  const liveHunt = (await S.db.doc("hunts/"+code).get()).data() || hunt;
+  if (isLobby(liveHunt)){
+    const id = rid();
+    const doc = { name:st.name, color:null, selfie:st.selfie||null, uid:S.uid, joinedAt:Date.now(), best:null };
+    await tryWrite(()=>S.db.doc(`hunts/${code}/hunters/${id}`).set(doc));
+    const mine = LS.get("mine."+code, []); mine.push(id); LS.set("mine."+code, mine); LS.set("active."+code, id);
+    recordMyHunt(code, hunt.title, "hunter");
+    return {id, ...doc};
+  }
   if (hunt.mode==="choose"){
     if (color && hunt.unique && counts[color.hex.toLowerCase()] && pal.find(c=>c.hex===color.hex)){ const e=new Error("Someone just grabbed "+color.name+". Pick another color."); throw e; }
     if (!color){ color = (hunt.unique && allUsed) ? extraColors(pal,1)[0] : least()[0]; }
   } else if (hunt.unique && allUsed){
-    const ex = extraColors(pal, hunt.mode==="random"?6:1); color = ex[hunt.mode==="random"?Math.floor(Math.random()*ex.length):0];
-  } else if (hunt.mode==="random"){
+    const rnd = hunt.mode==="random"||hunt.mode==="lobby";
+    const ex = extraColors(pal, rnd?6:1); color = ex[rnd?Math.floor(Math.random()*ex.length):0];
+  } else if (hunt.mode==="random"||hunt.mode==="lobby"){
     const pool = least(); color = pool[Math.floor(Math.random()*pool.length)];
   } else {
     color = least()[0];
@@ -1690,6 +1722,57 @@ function openEditMe(me){
       }},"Save"));
   };
   draw();
+}
+
+
+/* ---------- Reveal together (waiting room) ---------- */
+function lobbyCard(hunt, waiting, me, isOrganizer, closed){
+  const n=waiting.length;
+  return h("div",{class:"card stack lobby"},
+    h("div",{class:"row"}, h("span",{style:"font-size:30px"},"🚦"), h("div",{style:"flex:1"}, h("div",{class:"eyebrow"},"Waiting room"), h("h3",null, n ? `${n} hunter${n===1?"":"s"} ready` : "No one here yet")), h("span",{class:"pill"},"Colors: secret")),
+    n ? h("div",{class:"lobbyppl"}, waiting.map(x=>h("div",{class:"lobbyp"},
+      h("div",{class:"avatar",style:{borderColor:INK,backgroundImage:x.selfie?`url("${x.selfie}")`:"none",background:x.selfie?undefined:"#fff"}}, x.selfie?"":initials(x.name)),
+      h("span",null,x.name)))) : h("p",{class:"muted small"},"Share the code. Everyone who joins shows up here."),
+    me && !me.color ? h("div",{class:"notice small"},h("b",null,`You're in, ${me.name}! `),"Your color will pop up here when the organizer taps Go.") : null,
+    isOrganizer ? h("button",{class:"btn lg block golive",disabled:!n||closed,onclick:()=>startLobby()}, n ? `Go! Hand out ${n} color${n===1?"":"s"}` : "Go! (waiting for hunters)") :
+      h("p",{class:"muted small",style:"text-align:center"},"Waiting for the organizer to tap Go…"));
+}
+async function startLobby(){
+  const code=S.code;
+  const ok=await confirmDialog("Ready, set… go?","Colors will be handed out at random to everyone in the waiting room. People who join later get a random color right away.","Go!");
+  if (!ok) return;
+  const pr=progressOverlay("Handing out colors…");
+  try{
+    const lock=S.db.doc(`hunts/${code}/locks/colors`);
+    try{ await lock.acquire({holder:S.uid+"-go", ttlMs:15000}); }catch(e){}
+    const live=(await S.db.doc("hunts/"+code).get()).data()||S.hunt;
+    if (live.started){ pr.done(); toast("Colors were already handed out"); return; }
+    const all=(await S.db.collection(`hunts/${code}/hunters`).get()).docs.map(d=>({id:d.id,...d.data()}));
+    const waiting=all.filter(x=>!x.color); const counts=colorCounts(all);
+    let pal=[...(live.palette||[])];
+    for (let i=waiting.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [waiting[i],waiting[j]]=[waiting[j],waiting[i]]; }
+    let free=pal.filter(c=>!counts[c.hex.toLowerCase()]);
+    for (let i=free.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [free[i],free[j]]=[free[j],free[i]]; }
+    const picks=[];
+    waiting.forEach((x,i)=>{
+      let c;
+      if (live.unique){ c=free.shift(); if(!c){ c=extraColors(pal,1)[0] || pal[i%pal.length]; if(c && !pal.find(p=>p.hex.toLowerCase()===c.hex.toLowerCase())) pal.push({name:c.name,hex:c.hex.toUpperCase()}); } }
+      else { const min=Math.min(...pal.map(p=>counts[p.hex.toLowerCase()]||0)); const pool=pal.filter(p=>(counts[p.hex.toLowerCase()]||0)===min); c=pool[Math.floor(Math.random()*pool.length)]; }
+      counts[c.hex.toLowerCase()]=(counts[c.hex.toLowerCase()]||0)+1; picks.push([x,c]);
+    });
+    for (let k=0;k<picks.length;k++){ const [x,c]=picks[k]; pr.set(k/picks.length); await tryWrite(()=>S.db.doc(`hunts/${code}/hunters/${x.id}`).update({color:{name:c.name,hex:c.hex}})); }
+    await tryWrite(()=>S.db.doc("hunts/"+code).update({started:true, startedAt:Date.now(), palette:pal}));
+    pr.done(); toast("🎉 Colors are out — happy hunting!");
+  }catch(e){ pr.done(); toast(errMsg(e),5000); }
+}
+function revealColor(me, hunt){
+  const c=me.color; if(!c) return;
+  const m=openModal(h("div",{class:"reveal"},
+    h("div",{class:"eyebrow"},`${me.name}, you're hunting for`),
+    h("div",{class:"orb",style:{background:c.hex,"--glow":rgba(c.hex,.45)}}),
+    h("div",{class:"nm"},c.name),
+    h("p",{class:"muted",style:"margin:12px 0 22px"},`Find up to ${hunt.maxPhotos||20} things that are ${c.name.toLowerCase()}. Then pick your best shot.`),
+    h("button",{class:"btn block lg",onclick:()=>m.close()},"Start hunting")));
 }
 
 /* ==================== SHARE / ORGANIZER ==================== */
