@@ -321,7 +321,7 @@ function canvasBlob(c, type="image/jpeg", q=.9){ return new Promise((res,rej)=>c
 function errMsg(e){
   const code = e && e.code;
   if (code==="permission") return S.account ? "You don't have permission to do that." : "Please sign in first.";
-  if (code==="invalid_argument") { S.readOnly = true; return "You don't have permission to add to hunts on this page. Ask the organizer to invite you as an Editor."; }
+  if (code==="invalid_argument") { S.readOnly = true; return "You don't have permission to add to color hunts on this page. Ask the organizer to invite you as an Editor."; }
   if (code==="quota_exceeded" || code==="quota_or_state") return "Storage for this page is full. The organizer can remove some photos to make room.";
   if (code==="too_large") return "That photo is too large — try cropping it smaller.";
   if (code==="rate_limited" || code==="resource_exhausted") return "Slow down a moment, then try again.";
@@ -613,8 +613,8 @@ function noDbView(){
 /* ==================== HOME ==================== */
 function viewHome(){
   if (!S.db) return noDbView();
-  const codeIn = h("input",{class:"code-input",inputmode:"numeric",pattern:"[0-9]*",maxlength:"4",placeholder:"····","aria-label":"Hunt code",autocomplete:"off"});
-  const join = ()=>{ const c=codeIn.value.replace(/\D/g,""); if(c.length!==4){ toast("Enter the 4-digit hunt code"); return; } go("h"+c); };
+  const codeIn = h("input",{class:"code-input",inputmode:"numeric",pattern:"[0-9]*",maxlength:"4",placeholder:"····","aria-label":"Color hunt code",autocomplete:"off"});
+  const join = ()=>{ const c=codeIn.value.replace(/\D/g,""); if(c.length!==4){ toast("Enter the 4-digit color hunt code"); return; } go("h"+c); };
   codeIn.addEventListener("input",()=>{ codeIn.value=codeIn.value.replace(/\D/g,"").slice(0,4); if(codeIn.value.length===4) join(); });
   codeIn.addEventListener("keydown",e=>{ if(e.key==="Enter") join(); });
 
@@ -653,7 +653,7 @@ function viewHome(){
     h("div",{class:"card stack",style:"background:var(--ink);color:#fff;border-color:var(--ink)"},
       h("h3",null,"New color hunt"),
       h("p",{style:"opacity:.75"},"Pick your colors, choose how they're handed out, and share a 4-digit code with your group."),
-      h("button",{class:"btn block",style:"background:#fff;color:var(--ink);border-color:#fff",onclick:()=>go("create")},"Create a hunt")),
+      h("button",{class:"btn block",style:"background:#fff;color:var(--ink);border-color:#fff",onclick:()=>go("create")},"Create a color hunt")),
     h("div",{class:"card stack autocard"},
       h("div",{class:"row",style:"gap:12px"}, h("div",{class:"automark"}, ["#E23B3B","#F6C324","#2D6FD8","#2E9E5B"].map(c=>h("i",{style:{background:c}}))), h("div",null,h("div",{class:"eyebrow",style:"color:var(--ink)"},"Auto-Hunt"),h("h3",null,"Already have the photos?"))),
       h("p",{class:"muted"},`Upload up to ${AUTO_MAX} photos by yourself. We'll sort them into colors and lay out the book for you.`),
@@ -1299,9 +1299,9 @@ function viewCreate(){
     h("div",{class:"topbar"}, brand(), h("a",{class:"btn ghost sm",href:"#"},"Cancel")),
     h("div",{class:"card stack",style:"text-align:center;padding:30px 20px"},
       h("div",{class:"hero-swatches",style:"margin:0 0 4px"}, PALETTES[0].colors.map((c,i)=>h("i",{style:{background:c[1],height:"44px","--rot":((i%2?1:-1)*(2+i%3))+"deg"}}))),
-      h("h2",null,"Sign in to start a hunt"),
-      h("p",{class:"muted"},"Your account keeps track of the hunts you organize, so you can manage them from any device."),
-      h("button",{class:"btn lg block",onclick:()=>openSignIn("Start a hunt")},"Sign in or create an account")));
+      h("h2",null,"Sign in to start a color hunt"),
+      h("p",{class:"muted"},"Your account keeps track of the color hunts you organize, so you can manage them from any device."),
+      h("button",{class:"btn lg block",onclick:()=>openSignIn("Start a color hunt")},"Sign in or create an account")));
   if (!S.draft) S.draft = { step:1, title:"", place:"", occasion:"", date:new Date().toLocaleString("en-US",{month:"long",year:"numeric"}), tagline:"", note:"",
     preset:"rainbow", included:[...PALETTES[0].colors.map(c=>c[1]), ...BW.map(c=>c[1])], bw:true, custom:[], mode:"choose", unique:true, allowCustom:false, max:20, extras:false };
   const st = S.draft;
@@ -1316,7 +1316,7 @@ function viewCreate(){
   const draw = ()=>{
     const nav = h("div",{class:"row",style:"gap:10px"},
       st.step>1 ? h("button",{class:"btn ghost lg",style:"flex:1",onclick:()=>{ st.step--; draw(); window.scrollTo(0,0); }},"Back") : null,
-      st.step<3 ? h("button",{class:"btn lg",style:"flex:2",onclick:()=>{ if(st.step===1 && !st.title.trim()){ toast("Give your hunt a name"); return; } if(st.step===2 && !currentPalette().some(c=>st.included.includes(c[1]))){ toast("Pick at least one color"); return; } st.step++; draw(); window.scrollTo(0,0); }},"Next") : null,
+      st.step<3 ? h("button",{class:"btn lg",style:"flex:2",onclick:()=>{ if(st.step===1 && !st.title.trim()){ toast("Give your color hunt a name"); return; } if(st.step===2 && !currentPalette().some(c=>st.included.includes(c[1]))){ toast("Pick at least one color"); return; } st.step++; draw(); window.scrollTo(0,0); }},"Next") : null,
       st.step===3 ? createBtn() : null);
     let body;
     if (st.step===1){
@@ -1332,7 +1332,7 @@ function viewCreate(){
         field("Note for the book", note, "A fun line on the Meet the Color Hunters page.", true));
       body = h("div",{class:"card stack"},
         h("button",{type:"button",class:"autohint",onclick:()=>{ go("auto"); }}, "✨ Already have photos? Try Auto-Hunt ›"),
-        field("Hunt name", title),
+        field("Color hunt name", title),
         field("Where", place, null, true),
         h("div",null, field("Occasion", occ, null, true), h("div",{style:"margin-top:8px"},occChips)),
         field("Date", date),
@@ -1387,8 +1387,8 @@ function viewCreate(){
     try{
       const code=await createHunt({ title:st.title.trim(), place:st.place.trim(), occasion:st.occasion.trim(), date:st.date.trim(), tagline:st.tagline.trim(), note:st.note.trim(), palette:pal, mode:st.mode, unique:st.unique, allowCustom:st.allowCustom, maxPhotos:st.max });
       S.draft=null; S.justCreated=code; go("h"+code);
-    }catch(e){ toast(errMsg(e),5000); b.disabled=false; b.textContent="Create hunt"; }
-  }},"Create hunt"); return b; };
+    }catch(e){ toast(errMsg(e),5000); b.disabled=false; b.textContent="Create color hunt"; }
+  }},"Create color hunt"); return b; };
   draw();
   return root;
 }
@@ -1413,9 +1413,9 @@ async function createHunt(data){
 function viewHunt(){
   if (!S.db) return noDbView();
   const code = S.route.code;
-  if (S.hunt===undefined) return S.slow ? h("div",{class:"wrap"},h("div",{class:"topbar"},brand()),h("div",{class:"card stack"},h("h3",null,"Still looking for hunt "+code+"…"),h("p",{class:"muted"},"The hunt's data can't be reached yet. Check your connection — this page will update by itself."))) : loadingView("Finding hunt "+code+"…");
+  if (S.hunt===undefined) return S.slow ? h("div",{class:"wrap"},h("div",{class:"topbar"},brand()),h("div",{class:"card stack"},h("h3",null,"Still looking for color hunt "+code+"…"),h("p",{class:"muted"},"The color hunt's data can't be reached yet. Check your connection — this page will update by itself."))) : loadingView("Finding color hunt "+code+"…");
   if (S.hunt===null) return h("div",{class:"wrap stack-lg"}, h("div",{class:"topbar"},brand()),
-    h("div",{class:"card stack"}, h("h2",null,"No hunt with code "+code), h("p",{class:"muted"},"Double-check the code with whoever invited you."), h("a",{class:"btn",href:"#"},"Back")));
+    h("div",{class:"card stack"}, h("h2",null,"No color hunt with code "+code), h("p",{class:"muted"},"Double-check the code with whoever invited you."), h("a",{class:"btn",href:"#"},"Back")));
   const hunt = S.hunt; rememberHunt(hunt);
   if (S.justCreated===code){ S.justCreated=null; setTimeout(()=>openShare(true),50); }
   if (hunt.type==="scavenger") return viewScavHunt();
@@ -1451,10 +1451,10 @@ function viewHunt(){
   else if (hunt.auto) sections.push(h("div",{class:"notice"},`An Auto-Hunt book by ${hunt.author||"a Color Hunter"}.`));
   else if (!closed && !S.readOnly) sections.push(h("div",{class:"card stack",style:"text-align:center;padding:28px 20px"},
     h("div",{class:"hero-swatches",style:"margin:0 0 6px"}, (hunt.palette||[]).slice(0,7).map((c,i)=>h("i",{style:{background:c.hex,height:"46px","--rot":((i%2?1:-1)*(2+i%3))+"deg"}}))),
-    h("h3",null,"Ready to hunt?"),
+    h("h3",null,"Ready to color hunt?"),
     h("p",{class:"muted"}, hunt.mode==="choose" ? "Join with your name and pick a color." : hunt.mode==="random" ? "Join with your name — your color will be a surprise." : "Join with your name and get the next color in line."),
-    h("button",{class:"btn lg block",onclick:async()=>{ if(await requireAuth("Join the hunt")) openJoin(); }}, (AUTH&&!S.account)?"Sign in to join":"Join the hunt")));
-  else if (closed) sections.push(h("div",{class:"notice"},"This hunt is closed to new hunters and uploads. The book is ready to view."));
+    h("button",{class:"btn lg block",onclick:async()=>{ if(await requireAuth("Join the color hunt")) openJoin(); }}, (AUTH&&!S.account)?"Sign in to join":"Join the color hunt")));
+  else if (closed) sections.push(h("div",{class:"notice"},"This color hunt is closed to new hunters and uploads. The book is ready to view."));
 
   // book CTA
   const pageCount = H.length ? estimatePages(H) : 0;
@@ -1478,7 +1478,7 @@ function viewHunt(){
 
   const suggested = (isOrganizer && !hunt.place && !LS.get("noplace."+code,false)) ? topPlace(S.photos) : null;
   if (suggested) sections.splice(1,0,h("div",{class:"banner",style:"background:#EEF4FF;border-color:#C9DAF8"}, h("span",{style:"font-size:22px"},"📍"),
-    h("div",{style:"flex:1"},h("b",null,`Photos were taken around ${suggested}`),h("p",{class:"small muted"},"Use it as this hunt's location?")),
+    h("div",{style:"flex:1"},h("b",null,`Photos were taken around ${suggested}`),h("p",{class:"small muted"},"Use it as this color hunt's location?")),
     h("div",{class:"row",style:"gap:6px"}, h("button",{class:"btn ghost sm",onclick:()=>{ LS.set("noplace."+code,true); renderView(); }},"No"),
       h("button",{class:"btn sm",onclick:async()=>{ try{ await tryWrite(()=>S.db.doc("hunts/"+code).update({place:suggested})); toast("Location added"); }catch(e){ toast(errMsg(e),5000); } }},"Use"))));
   if (isOrganizer) sections.push(h("button",{class:"btn soft block",onclick:()=>openOrganizer()},"⚙︎  Organizer tools"));
@@ -1571,13 +1571,13 @@ function openJoin(){
         const extras = allTaken ? h("div",{class:"swatch-grid"}, extraColors(pal).map(c=>{ const on=st.color&&st.color.hex===c.hex;
           return h("button",{class:"swatch"+(on?" on":""),onclick:()=>{st.color={name:c.name,hex:c.hex};draw();}}, h("span",{class:"sw",style:{background:c.hex}}), h("span",{class:"tick"},"✓"), h("span",{class:"nm"},c.name), h("span",{class:"sub"},"New color")); })) : null;
         body.replaceChildren(stepper(3), h("h2",null,"Pick your color"),
-          allTaken ? h("div",{class:"notice"},h("b",null,"Every color is taken, "),"so pick a new one to add to the hunt:") : h("p",{class:"muted"},"You'll photograph everything you can find in this color."),
+          allTaken ? h("div",{class:"notice"},h("b",null,"Every color is taken, "),"so pick a new one to add to the color hunt:") : h("p",{class:"muted"},"You'll photograph everything you can find in this color."),
           allTaken ? extras : null,
           allTaken ? h("div",{class:"eyebrow",style:"margin-top:8px"},"Already taken") : null,
           grid, custom,
           st.color && !pal.find(c=>c.hex===st.color.hex) ? h("p",{class:"small"},"Selected: ",h("b",null,st.color.name)) : null,
           h("div",{class:"row"}, h("button",{class:"btn ghost block",onclick:()=>{st.step=2;draw();}},"Back"),
-            h("button",{class:"btn block",disabled:!st.color,onclick:()=>finish()},"Join hunt")));
+            h("button",{class:"btn block",disabled:!st.color,onclick:()=>finish()},"Join color hunt")));
       } else {
         body.replaceChildren(stepper(3), h("h2",null, hunt.mode==="random"?"Your color is a surprise":"Your color is next in line"),
           h("p",{class:"muted"}, (hunt.unique && pal.every(c=>counts[c.hex.toLowerCase()])) ? "Every color is taken, so you'll get a brand-new one. Tap to see it!" : "Tap below to find out what you're hunting for."),
@@ -1627,7 +1627,7 @@ async function joinHunt(code, st){
     color = least()[0];
   }
   if (!color) color = least()[0];
-  if (!color) throw new Error("This hunt has no colors set up.");
+  if (!color) throw new Error("This color hunt has no colors set up.");
   if (!pal.find(c=>c.hex.toLowerCase()===color.hex.toLowerCase())){
     pal.push({name:color.name, hex:color.hex.toUpperCase()});
     try{ await tryWrite(()=>S.db.doc("hunts/"+code).update({palette:pal})); }catch(e){ console.warn(e); }
@@ -1674,7 +1674,7 @@ function openShare(fresh){
   const hunt=S.hunt, code=S.code, link=inviteLink(code);
   const msg = `Join our Color Hunt “${hunt.title}”! 🎨📸\n${link?`Open ${link}\nor enter`:"Enter"} code ${code} in Color Hunt.`;
   openModal(h("div",{class:"stack"},
-    fresh ? h("div",{class:"eyebrow"},"Your hunt is live") : h("div",{class:"eyebrow"},"Invite hunters"),
+    fresh ? h("div",{class:"eyebrow"},`Your ${huntWord()} is live`) : h("div",{class:"eyebrow"},"Invite hunters"),
     h("h2",null, fresh ? "Share this code" : hunt.title),
     h("div",{style:"text-align:center;padding:14px 0"},
       h("div",{style:"font-family:var(--serif);font-size:72px;letter-spacing:.18em;font-weight:500;line-height:1"},code),
@@ -1692,13 +1692,13 @@ function openOrganizer(){
   const body = h("div",{class:"stack"});
   const m = openModal(body);
   body.append(h("h2",null,"Organizer tools"),
-    h("label",{class:"field"},h("span",null,"Hunt name"),title),
+    h("label",{class:"field"},h("span",null,capFirst(huntWord())+" name"),title),
     h("label",{class:"field"},h("span",null,"Where"),place),
     h("label",{class:"field"},h("span",null,"Occasion"),occ),
     h("label",{class:"field"},h("span",null,"Date"),date),
     h("label",{class:"field"},h("span",null,"Book tagline"),tag),
     h("label",{class:"field"},h("span",null,"Note for the book"),note),
-    h("label",{class:"toggle"},h("div",null,h("b",{style:"display:block"},"Open for joining & uploads"),h("span",{class:"muted small"},"Turn off when the hunt is over.")),h("span",{class:"switch"},open,h("i"))),
+    h("label",{class:"toggle"},h("div",null,h("b",{style:"display:block"},"Open for joining & uploads"),h("span",{class:"muted small"},`Turn off when the ${huntWord()} is over.`)),h("span",{class:"switch"},open,h("i"))),
     h("button",{class:"btn block",onclick:async()=>{
       try{ await tryWrite(()=>S.db.doc("hunts/"+code).update({title:title.value.trim()||hunt.title, place:place.value.trim(), occasion:occ.value.trim(), date:date.value.trim(), tagline:tag.value.trim(), note:note.value.trim(), status:open.checked?"open":"closed"})); toast("Saved"); m.close(); }
       catch(e){ toast(errMsg(e),5000); }
@@ -1715,7 +1715,7 @@ function openOrganizer(){
     sortedHunters().map(x=>h("div",{class:"list-item"},
       h("div",{class:"avatar",style:{borderColor:x.color.hex,backgroundImage:x.selfie?`url("${x.selfie}")`:"none"}},x.selfie?"":initials(x.name)),
       h("div",{style:"flex:1"},h("b",null,x.name),h("div",{class:"muted small"},x.color.name+" · "+S.photos.filter(p=>p.hunter===x.id).length+" photos")),
-      h("button",{class:"btn ghost sm",onclick:async()=>{ if(await confirmDialog(`Remove ${x.name}?`,"Their photos will be deleted from the hunt and the book.","Remove")){ m.close(); removeHunter(x); } }},"Remove"))));
+      h("button",{class:"btn ghost sm",onclick:async()=>{ if(await confirmDialog(`Remove ${x.name}?`,`Their photos will be deleted from the ${huntWord()} and the book.`,"Remove")){ m.close(); removeHunter(x); } }},"Remove"))));
 }
 function choosePhoto(label, current, noneLabel, onPick, allowUpload){
   let sel=current;
@@ -2307,6 +2307,8 @@ async function drawPage(page, size, canvas){
 const PRICES = { digital:1.99, maps:2.99, softcover:29.99, hardcoverUp:15.00, premiumColorUp:9.99, includedPages:20, extraPage:0.75 };
 const PAYMENTS_LIVE = !!(window.CH_CONFIG && window.CH_CONFIG.paymentsLive);
 const money = v => "$"+v.toFixed(2);
+function huntWord(){ return (S.hunt && S.hunt.type==="scavenger") ? "scavenger hunt" : "color hunt"; }
+const capFirst=t=>t.charAt(0).toUpperCase()+t.slice(1);
 function canManage(){ const hu=S.hunt; return !!hu && (hu.createdBy===S.uid || safe(()=>S.user && S.user.isOwner && S.user.isOwner())); }
 async function setPremium(key, on){
   const prem={...(S.hunt.premium||{}), [key]:on};
@@ -2447,13 +2449,13 @@ function viewBook(){
   if (!S.db) return noDbView();
   const code=S.route.code;
   if (S.hunt===undefined) return loadingView("Loading the book…");
-  if (S.hunt===null) return h("div",{class:"wrap"},h("div",{class:"topbar"},brand()),h("div",{class:"card"},h("h2",null,"No hunt with code "+code)));
+  if (S.hunt===null) return h("div",{class:"wrap"},h("div",{class:"topbar"},brand()),h("div",{class:"card"},h("h2",null,"No color hunt with code "+code)));
   const pagesEl = h("div",{class:"book-pages"});
   S.bookEl = pagesEl; S.bookSig = null;
   const hunt=S.hunt;
   const ex = (ic,t,s,fn)=>h("button",{class:"export",onclick:fn},h("span",{class:"ic"},ic),h("b",null,t),h("span",null,s));
   const root = h("div",{class:"wrap wide"},
-    h("div",{class:"topbar"}, h("a",{class:"btn ghost sm",href:"#h"+code},"‹ Back to hunt"), h("span",{class:"pill codechip"},code)),
+    h("div",{class:"topbar"}, h("a",{class:"btn ghost sm",href:"#h"+code},`‹ Back to ${huntWord()}`), h("span",{class:"pill codechip"},code)),
     h("div",{class:"eyebrow"},"Photo book"),
     h("h2",{style:"margin:6px 0 4px"}, hunt.title),
     h("p",{class:"muted",id:"bookmeta"},""),
